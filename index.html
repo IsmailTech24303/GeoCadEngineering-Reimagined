@@ -1,0 +1,1766 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netcad 5.2 GIS Simülatörü BY ISMAIL AYAS
+
+    </title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100vw; height: 100vh; background-color: #ffffff;
+            cursor: crosshair; position: relative; overflow: hidden;
+        }
+
+        #canvas-container.query-mode { cursor: help !important; }
+        #canvas-container.delete-mode { cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="red" stroke="black" d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>') 12 12, auto !important; }
+        
+        #drawing-canvas {
+            position: absolute; top: 0; left: 0;
+            transform-origin: 0 0; width: 1px; height: 1px;
+        }
+
+        #svg-layer {
+            position: absolute; top: 0; left: 0;
+            overflow: visible; pointer-events: none;
+        }
+
+        polyline, polygon { pointer-events: visiblePainted; cursor: inherit; }
+
+        .highlight-segment {
+            stroke: black !important; stroke-width: 4 !important;
+            filter: drop-shadow(0 0 5px rgba(0,0,0,0.8)); stroke-linecap: round;
+        }
+        .highlight-polygon-full {
+            stroke: #000080 !important; stroke-width: 3 !important;
+            fill: rgba(0, 0, 128, 0.3) !important;
+        }
+
+        /* SAĞ TOOLBAR */
+        #toolbar {
+            position: fixed; top: 20px; right: 20px; background: #e1e1e1;
+            padding: 10px; border: 2px solid #808080; z-index: 100; width: 220px;
+            box-shadow: 3px 3px 0px #fff inset;
+        }
+        #toolbar.minimized { width: 100px; padding: 5px; }
+        #toolbar-content { display: block; }
+        #toolbar.minimized #toolbar-content { display: none; }
+        
+        .toggle-toolbar-btn {
+            background: #808080; color: white; border: none; padding: 2px 5px;
+            font-size: 10px; cursor: pointer; float: right; margin-bottom: 5px;
+        }
+
+        /* SOL TOOLBAR */
+        #left-toolbar {
+            position: fixed; top: 20px; left: 10px;
+            display: flex; flex-direction: column; gap: 5px; z-index: 100;
+        }
+
+        .side-btn {
+            width: 80px; height: 30px; background: #d4d4d4; border: 1px solid #444;
+            font-weight: bold; font-size: 11px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            text-align: center;
+        }
+
+        /* SNAP MENUSU */
+        #snap-menu {
+            display: none;
+            background: #e1e1e1;
+            border: 1px solid #444;
+            padding: 5px;
+            margin-left: 5px;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .snap-option {
+            font-size: 10px;
+            padding: 4px;
+            background: #eee;
+            border: 1px solid #888;
+            cursor: pointer;
+            text-align: left;
+        }
+        .snap-option.active { background: #00ff00; }
+
+        button { width: 100%; padding: 8px; margin-bottom: 5px; cursor: pointer; background: #d4d4d4; border: 1px solid #444; font-weight: bold; }
+        button.active, .side-btn.active { background: #ffcc00; border: 2px solid #cc7700; }
+        
+        .export-btn { background: #4CAF50 !important; color: white; border: 1px solid #2e7d32 !important; margin-top: 5px; }
+        .import-btn { background: #2196F3 !important; color: white; border: 1px solid #0b7dda !important; }
+
+        /* TABAKA PENCERESİ */
+        #layer-manager {
+            display: none; position: fixed; top: 100px; left: 100px;
+            width: 480px; background: #f0f0f0; border: 1px solid #808080;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 500; font-size: 12px;
+        }
+        .layer-header { background: #ece9d8; padding: 4px 8px; display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #aca899; align-items: center; }
+        .layer-list { max-height: 300px; overflow-y: auto; background: #fff; }
+        .layer-row { display: flex; align-items: center; padding: 4px; border-bottom: 1px solid #d4d0c8; gap: 5px; cursor: pointer; }
+        .layer-row.active-layer { background: #ddecff; border-left: 4px solid #0055ff; }
+        .layer-controls { display: flex; gap: 3px; align-items: center; margin-left: auto; }
+        .layer-btn {
+            width: 22px; height: 22px; border: 1px solid #808080;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            background: #eee; font-size: 10px; font-weight: bold;
+        }
+        .color-box { width: 20px; height: 20px; border: 1px solid #000; cursor: pointer; position: relative; }
+        .layer-name { flex-grow: 1; padding-left: 5px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100px; }
+        
+        #hidden-color-picker { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+
+        /* Nokta Editörü Paneli */
+        #point-editor {
+            display: none; position: fixed; top: 100px; left: 100px;
+            width: 420px; background: #f0f0f0; border: 1px solid #808080;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 501; font-size: 12px;
+        }
+        .point-list { max-height: 400px; overflow-y: auto; background: #fff; }
+        .point-edit-row { display: flex; align-items: center; padding: 5px; border-bottom: 1px solid #d4d0c8; gap: 5px; }
+        .point-edit-row input { width: 60px; font-size: 11px; }
+
+        /* Bilgi Modalı */
+        .info-modal { position: fixed; background: #f0f0f0; border: 1px solid #808080; z-index: 200; width: 350px; font-size: 11px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+        .modal-header { background: #ece9d8; padding: 2px 8px; display: flex; justify-content: space-between; font-weight: bold; cursor: move; border-bottom: 1px solid #aca899; }
+        .modal-body table { width: 100%; border-collapse: collapse; background: white; }
+        .modal-body td { border: 1px solid #d4d0c8; padding: 2px 5px; height: 18px; }
+        .modal-body td:first-child { background: #f4f4f4; width: 40%; font-weight: bold; }
+        .modal-footer { padding: 8px; text-align: center; background: #ece9d8; display: flex; justify-content: center; gap: 5px; }
+
+        .point-wrapper { position: absolute; transform: translate(-5px, -5px); pointer-events: none; }
+        .point { width: 6px; height: 6px; border-radius: 50%; }
+        .point-label { position: absolute; left: 10px; top: -5px; font-size: 11px; white-space: nowrap; padding: 1px 3px; background: rgba(255, 255, 255, 0.7); border-radius: 3px; }
+        
+        .dynamic-measure-label {
+            position: absolute; pointer-events: none; z-index: 9999;
+            background: rgba(255, 255, 0, 0.85); color: #000; border: 1px solid #000;
+            padding: 2px 5px; font-size: 12px; font-weight: bold; border-radius: 2px;
+            white-space: nowrap; transform: translate(-50%, -50%);
+        }
+
+        .area-label {
+            position: absolute; transform: translate(-50%, -50%);
+            font-size: 14px; font-weight: bold; pointer-events: none;
+            background: rgba(255, 255, 255, 0.6); padding: 2px 5px; border-radius: 3px; white-space: nowrap;
+        }
+
+        .layer-hidden { display: none !important; }
+
+        #input-window {
+            margin-top: 5px; border-top: 1px solid #888; padding-top: 10px;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .coord-inputs-row {
+            display: flex; justify-content: space-between; align-items: center; gap: 2px;
+        }
+        .coord-field { display: flex; align-items: center; gap: 2px; font-size: 11px; font-weight: bold; }
+        .coord-field input { width: 45px; padding: 2px; border: 1px solid #888; }
+        
+        #snap-indicator {
+            position: absolute; width: 12px; height: 12px; border: 2px solid #00ff00;
+            pointer-events: none; display: none; z-index: 10000; transform: translate(-50%, -50%);
+        }
+
+        .measure-line-style { stroke: #ff00ff; stroke-width: 2; stroke-dasharray: 5; }
+        .measure-poly-style { fill: rgba(255, 0, 255, 0.2); stroke: #ff00ff; stroke-width: 1; stroke-dasharray: 3; }
+
+        /* HATCH MODAL */
+        .hatch-btn { width: 40px; height: 40px; border: 1px solid #888; cursor: pointer; background: #fff; display: flex; align-items: center; justify-content: center; margin: 2px; }
+        .hatch-btn:hover { background: #e0e0e0; border-color: #000; }
+        .hatch-btn.active { border: 2px solid #000080; background: #ddecff; }
+        .hatch-btn svg { width: 30px; height: 30px; pointer-events: none; }
+
+        /* SYMBOL PALETTE */
+        #symbol-palette {
+            display: none; position: fixed; top: 100px; left: 100px;
+            width: 220px; background: #f0f0f0; border: 1px solid #808080;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 505;
+        }
+        .symbol-btn { width: 45px; height: 45px; border: 1px solid #888; margin: 3px; cursor: pointer; background: #fff; display: inline-flex; align-items: center; justify-content: center; flex-direction: column; }
+        .symbol-btn:hover { background: #e0e0e0; } .symbol-btn.active { border: 2px solid #000080; background: #ddecff; } .symbol-btn svg { width: 24px; height: 24px; pointer-events: none; overflow: visible; } .symbol-btn span { font-size: 9px; margin-top: 2px; }
+
+        /* RASTER MODAL */
+        #raster-modal {
+            display: none; position: fixed; top: 100px; left: 350px;
+            width: 260px; background: #f0f0f0; border: 1px solid #808080;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 600; font-size: 12px;
+        }
+
+        /* ADVANCED MENU */
+        #advanced-menu {
+            display: none;
+            background: #e1e1e1;
+            border: 1px solid #444;
+            padding: 5px;
+            margin-left: 5px;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        /* ITRF MODAL */
+        #itrf-modal {
+            display: none; position: fixed; top: 100px; left: 400px;
+            width: 280px; background: #f0f0f0; border: 1px solid #808080;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3); z-index: 650; font-size: 12px;
+        }
+
+        /* MINI MAP */
+        #minimap {
+            position: fixed; bottom: 30px; right: 20px;
+            width: 200px; height: 150px;
+            background: #fff; border: 2px solid #444;
+            z-index: 950; display: none;
+            box-shadow: -2px -2px 5px rgba(0,0,0,0.3);
+        }
+        #minimap svg { width: 100%; height: 100%; display: block; background: #f8f8f8; }
+        #mini-view-rect {
+            fill: none; stroke: red; stroke-width: 2; vector-effect: non-scaling-stroke;
+        }
+
+        /* INFO MODAL & BUTTON */
+        #btn-info-help {
+            position: fixed; bottom: 50px; right: 20px;
+            width: 40px; height: 40px; border-radius: 50%;
+            background: #0078d7; color: white; font-size: 24px; font-weight: bold;
+            border: 2px solid #fff; cursor: pointer; z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+        }
+        #info-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 5000;
+            align-items: center; justify-content: center;
+        }
+        #info-content {
+            width: 80%; height: 80%; background: #fff; border-radius: 8px;
+            display: flex; overflow: hidden; position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .info-col {
+            width: 50%; height: 100%; padding: 30px; overflow-y: auto;
+            box-sizing: border-box; font-size: 14px; line-height: 1.5; color: #333;
+        }
+        .info-col:first-child { border-right: 1px solid #ccc; background: #f9f9f9; }
+    </style>
+</head>
+<body>
+
+<div id="left-toolbar">
+    <button id="btn-query" class="side-btn" onclick="setMode('query')">SORGU</button>
+    <button id="btn-snap" class="side-btn" onclick="toggleSnapMenu()">YAKALAMA</button>
+    <div id="snap-menu">
+        <div id="snap-end" class="snap-option" onclick="toggleSnapOption('end')">Uç Nokta (End)</div>
+        <div id="snap-mid" class="snap-option" onclick="toggleSnapOption('mid')">Orta Nokta (Mid)</div>
+        <div id="snap-int" class="snap-option" onclick="toggleSnapOption('int')">Kesişim (Int)</div>
+    </div>
+    <button id="btn-measure-dist" class="side-btn" onclick="setMode('measure_dist')">MESAFE</button>
+    <button id="btn-measure-area" class="side-btn" onclick="setMode('measure_area')">ALAN HESAP</button>
+    <button id="btn-calc-volume" class="side-btn" onclick="setMode('calc_volume')">KÜBAJ</button>
+    <button id="btn-advanced" class="side-btn" onclick="toggleAdvancedMenu()">GELİŞMİŞ</button>
+    <div id="advanced-menu">
+        <div class="snap-option" onclick="setMode('move_select')">Kaydır</div>
+        <div class="snap-option" onclick="setMode('rotate_select')">Döndür</div>
+        <div class="snap-option" onclick="setMode('scale_select')">Ölçekle</div>
+        <div class="snap-option" onclick="setMode('extend_select')">Uzat</div>
+    </div>
+    <button id="btn-symbols" class="side-btn" onclick="toggleSymbolPalette()">İKON</button>
+    <button id="btn-raster" class="side-btn" onclick="toggleRasterModal()">RASTER</button>
+    <button id="btn-itrf" class="side-btn" onclick="toggleITRFModal()">ITRF</button>
+    <button id="btn-toggle-coords" class="side-btn active" onclick="toggleCoords()">KOORD GÖR</button>
+    <button id="btn-layers" class="side-btn" onclick="toggleLayerManager()">TABAKALAR</button>
+    <button id="btn-edit-points" class="side-btn" onclick="togglePointEditor()">EDİTÖR</button>
+    <button id="btn-undo" class="side-btn" onclick="undo()">GERİ AL</button>
+    <button id="btn-redo" class="side-btn" onclick="redo()">İLERİ AL</button>
+    <button id="btn-delete" class="side-btn" onclick="setMode('delete')">SİL</button>
+    <button id="btn-dxf-import" class="side-btn import-btn" onclick="document.getElementById('dxf-file-input').click()">DXF AÇ</button>
+    <button id="btn-dxf-export" class="side-btn export-btn" onclick="exportToDXF()">DXF AKTAR</button>
+    <button id="btn-minimap" class="side-btn" onclick="toggleMiniMap()">MİNİ HARİTA</button>
+    <input type="file" id="dxf-file-input" style="display:none" accept=".dxf" onchange="importDXF(this)">
+</div>
+
+<div id="layer-manager">
+    <div class="layer-header">
+        <span>Tabakalar</span>
+        <div class="layer-action-btns">
+            <button class="add-layer-btn" onclick="addNewLayer()">+</button>
+            <button class="del-layer-btn" onclick="deleteActiveLayer()">-</button>
+        </div>
+        <span onclick="toggleLayerManager()" style="cursor:pointer; margin-left: 10px;">X</span>
+    </div>
+    <div style="padding: 4px; background: #f0f0f0; border-bottom: 1px solid #aca899; display: flex; align-items: center; gap: 4px;">
+        <input type="text" id="layer-search-input" placeholder="Tabaka Ara..." oninput="renderLayers()" style="flex-grow: 1; font-size: 11px; padding: 2px; border: 1px solid #888;">
+        <span style="font-size: 12px;">🔍</span>
+        <span onclick="clearLayerSearch()" style="cursor: pointer; color: red; font-size: 12px; font-weight: bold;" title="Temizle">⌫</span>
+    </div>
+    <div id="layer-list-container" class="layer-list"></div>
+</div>
+
+<div id="point-editor">
+    <div class="layer-header">
+        <span>Nokta Editörü</span>
+        <span onclick="togglePointEditor()" style="cursor:pointer;">X</span>
+    </div>
+    <div id="point-list-container" class="point-list"></div>
+</div>
+
+<div id="toolbar">
+    <button class="toggle-toolbar-btn" id="btn-minimize" onclick="toggleToolbar()">_</button>
+    <div id="minimized-label" style="display:none; cursor:pointer; font-weight:bold; font-size:12px; text-align:center;" onclick="toggleToolbar()">NOKTA ATIM</div>
+    
+    <div id="toolbar-content">
+        <button id="btn-point" onclick="setMode('point')">NOKTA AT (+)</button>
+        <button id="btn-line" onclick="setMode('line')">ÇOKLU ÇİZGİ (/)</button>
+        <button id="btn-polygon" onclick="setMode('polygon')">ALAN KAPAT (⬠)</button>
+        <button id="btn-parallel" onclick="setMode('parallel')">PARALEL ÇİZGİ (=)</button>
+        
+        <div id="parallel-options" style="display:none; background:#c0c0c0; padding:10px; border:1px solid #000; margin-top:5px;">
+            <label>Sol:</label> <input type="number" id="para-left" value="20" style="width:50px">
+            <label>Sağ:</label> <input type="number" id="para-right" value="20" style="width:50px">
+        </div>
+
+        <div id="common-options" style="display: none;">
+            <button id="btn-mouse" onclick="setSubMode('mouse')">Mouse ile</button>
+            <button id="btn-coords" onclick="setSubMode('coords')">Koordinat Gir</button>
+            <div id="input-window">
+                <div class="coord-inputs-row">
+                    <div class="coord-field">X:<input type="number" id="inp-x"></div>
+                    <div class="coord-field">Y:<input type="number" id="inp-y"></div>
+                    <div class="coord-field">Z:<input type="number" id="inp-z" value="0.00"></div>
+                </div>
+                <div class="add-btn-container">
+                    <button class="btn-add-manual" onclick="handleManualInput()" style="margin-top:5px">Ekle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="area-style-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#f0f0f0; border:1px solid #808080; padding:15px; z-index:1000;">
+    <b>Alan Tipi Seçin</b><br><br>
+    <input type="radio" name="area-style" value="filled" checked> Kapalı (Dolu)<br>
+    <input type="radio" name="area-style" value="hatched"> Taralı (Çizgili)<br><br>
+    <button onclick="applyAreaStyle()">Tamam</button>
+</div>
+
+<div id="hatch-select-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#f0f0f0; border:1px solid #808080; padding:10px; z-index:2000; width:240px; box-shadow: 3px 3px 10px rgba(0,0,0,0.4);">
+    <div class="modal-header" style="margin-bottom:10px; background:#ece9d8; padding:4px;"><span>Tarama Stili</span><span onclick="closeHatchModal()" style="cursor:pointer; float:right; font-weight:bold;">X</span></div>
+    <div id="hatch-options" style="display:flex; flex-wrap:wrap; justify-content:center;">
+        </div>
+</div>
+
+<div id="symbol-palette">
+    <div class="layer-header">
+        <span>Sembol Paleti</span>
+        <span onclick="toggleSymbolPalette()" style="cursor:pointer;">X</span>
+    </div>
+    <div id="symbol-list" style="padding: 5px; display: flex; flex-wrap: wrap; justify-content: center;"></div>
+</div>
+
+<div id="raster-modal">
+    <div class="layer-header">
+        <span>Raster Yönetimi</span>
+        <span onclick="toggleRasterModal()" style="cursor:pointer;">X</span>
+    </div>
+    <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
+        <label>Resim Seç (PNG/JPG):</label>
+        <input type="file" id="raster-file-input" accept="image/png, image/jpeg" style="width:95%">
+        <div style="display:flex; gap:5px;">
+            <button onclick="addRaster('fit')">Ekrana Sığdır</button>
+            <button onclick="addRaster('original')">Orjinal Boyut</button>
+        </div>
+        <hr style="width:100%; border:0; border-top:1px solid #ccc; margin:0;">
+        <label>Şeffaflık: <span id="raster-opacity-val">100%</span></label>
+        <input type="range" id="raster-opacity-range" min="0" max="100" value="100" oninput="updateRasterOpacity(this.value)">
+        <button onclick="clearRaster()" style="background:#ffcccc;">Resmi Kaldır</button>
+    </div>
+</div>
+
+<div id="itrf-modal">
+    <div class="layer-header">
+        <span>ITRF Dönüşüm Ayarları</span>
+        <span onclick="toggleITRFModal()" style="cursor:pointer;">X</span>
+    </div>
+    <div style="padding:10px; display:flex; flex-direction:column; gap:8px;">
+        <label><input type="checkbox" id="itrf-active" onchange="updateITRFSettings()"> ITRF Aktif</label>
+        <hr style="width:100%; border:0; border-top:1px solid #ccc; margin:0;">
+        <div class="coord-field">Öteleme Y (Sağa): <input type="number" id="itrf-dy" value="500000" style="width:100px"></div>
+        <div class="coord-field">Öteleme X (Yukarı): <input type="number" id="itrf-dx" value="4000000" style="width:100px"></div>
+        <div class="coord-field">Dönüklük (Derece): <input type="number" id="itrf-rot" value="0" style="width:100px"></div>
+        <div class="coord-field">Ölçek Faktörü: <input type="number" id="itrf-scale" value="1" step="0.000001" style="width:100px"></div>
+        <button onclick="updateITRFSettings()">Uygula</button>
+    </div>
+</div>
+
+<div id="canvas-container">
+    <div id="snap-indicator"></div>
+    <div id="drawing-canvas">
+        <svg id="svg-layer" width="100000" height="100000">
+            <defs>
+                <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <line x1="0" y1="0" x2="0" y2="8" style="stroke:inherit; stroke-width:1" />
+                </pattern>
+            </defs>
+            <g id="raster-group"></g>
+            <line id="rubber-band" stroke="blue" stroke-dasharray="4" style="visibility: hidden;" />
+            <polyline id="para-band-left" stroke="green" stroke-dasharray="4" fill="none" style="visibility: hidden;" />
+            <polyline id="para-band-right" stroke="green" stroke-dasharray="4" fill="none" style="visibility: hidden;" />
+            <line id="highlight-line" class="highlight-segment" style="visibility: hidden;" />
+            <polygon id="highlight-poly" class="highlight-polygon-full" style="visibility: hidden;" />
+            
+            <line id="measure-line-ui" class="measure-line-style" style="visibility: hidden;" />
+            <polygon id="measure-poly-ui" class="measure-poly-style" style="visibility: hidden;" />
+        </svg>
+    </div>
+    <div id="dynamic-measure-label" class="dynamic-measure-label" style="display:none;"></div>
+</div>
+
+<div id="status-bar" style="position:fixed; bottom:0; width:100%; background:#d4d4d4; padding:2px 10px; font-size:12px; border-top:1px solid #808080; z-index:1000;">
+    <span id="coord-display">X: 0.000 , Y: 0.000</span>
+    <span id="measure-output" style="margin-left:20px; color:#c00; font-weight:bold;"></span>
+</div>
+
+<input type="color" id="hidden-color-picker" onchange="changeLayerColor(this.value)">
+
+<div id="minimap">
+    <svg id="minimap-svg"></svg>
+</div>
+
+<button id="btn-info-help" onclick="openInfoModal()">?</button>
+
+<div id="info-overlay" onclick="closeInfoModal()">
+    <div id="info-content" onclick="event.stopPropagation()">
+        <div class="info-col">
+            <h2 style="margin-top:0; border-bottom:2px solid #ccc; padding-bottom:10px;">[EN]</h2>
+            <p><b>CREATOR:</b> İsmail Ayas</p>
+            <p><b>DESCRIPTION:</b> A GIS simulator developed entirely with a 'from scratch' philosophy, without depending on any pre-built software; a full-fledged technical software aimed at having a modern engineering interface and functionality in every detail—from its SVG-based vector drawing engine to its dynamic snap system—capable of not only visualizing data but also exporting it in industrial formats (DXF).</p>
+            <p><b>PROJECT NAME:</b> Netcad Reimagined</p>
+            <p><b>TECHNOLOGIES USED:</b> HTML5, CSS3, JavaScript (SVG-based drawing engine).</p>
+            <p><b>PROJECT FEATURES:</b></p>
+            <ul style="padding-left:20px;">
+                <li>Add Point (+)</li>
+                <li>Polyline</li>
+                <li>Create Polygon</li>
+                <li>Parallel Line Creation</li>
+                <li>Symbol and Icon Library</li>
+                <li>Precise Coordinate Input (X, Y, Z)</li>
+                <li>Endpoint Snapping</li>
+                <li>Midpoint Snapping</li>
+                <li>Intersection Snapping</li>
+                <li>Distance Measurement</li>
+                <li>Area Calculation</li>
+                <li>Volume (Cubage) Calculation</li>
+                <li>Object Querying</li>
+                <li>Layer Management</li>
+                <li>Layer Color and Style Settings</li>
+                <li>Layer Locking and Hiding</li>
+                <li>Layer Search</li>
+                <li>Move</li>
+                <li>Rotate</li>
+                <li>Scale</li>
+                <li>Extend</li>
+                <li>ITRF Transformation and Coordinate Settings</li>
+                <li>DXF Import</li>
+                <li>DXF Export</li>
+                <li>Raster (Image) Loading and Management</li>
+                <li>Mini Map</li>
+                <li>Undo / Redo</li>
+                <li>Point Editor</li>
+                <li>Hatching Styles</li>
+                <li>Dynamic Labels and Information Panels</li>
+                <li>Zoom and Pan (Navigation) Tools</li>
+            </ul>
+        </div>
+        <div class="info-col">
+            <h2 style="margin-top:0; border-bottom:2px solid #ccc; padding-bottom:10px;">[TR]</h2>
+            <p><b>YARATICI:</b> İsmail Ayas</p>
+            <p><b>Açıklama:</b> Hiçbir hazır yazılıma bağlı kalmadan, tamamen 'from scratch' mantığıyla geliştirilen bir GIS simülatörü; SVG tabanlı vektörel çizim motorundan dinamik snap (yakalama) sistemine kadar her detayıyla modern bir mühendislik arayüzüne ve işlevine sahip olmayı hedefleyen ve veriyi sadece görselleştirmekle kalmayan aynı zamanda endüstriyel formatlarda (DXF) dışa aktarabilen tam teşekküllü bir teknik yazılımdır.</p>
+            <p><b>Proje Adı:</b> Netcad Reimagined</p>
+            <p><b>Kullanılan Teknolojiler:</b> HTML5, CSS3, JavaScript (SVG tabanlı çizim motoru).</p>
+            <p><b>PROJE ÖZELLİKLERİ:</b></p>
+            <ul style="padding-left:20px;">
+                <li>Nokta At (+)</li>
+                <li>Çoklu Çizgi (Polyline)</li>
+                <li>Alan Kapat (Polygon)</li>
+                <li>Paralel Çizgi Oluşturma</li>
+                <li>Sembol ve İkon Kütüphanesi</li>
+                <li>Hassas Koordinat Girişi (X, Y, Z)</li>
+                <li>Uç Nokta (End) Yakalama</li>
+                <li>Orta Nokta (Mid) Yakalama</li>
+                <li>Kesişim (Int) Yakalama</li>
+                <li>Mesafe Ölçümü</li>
+                <li>Alan Hesaplaması</li>
+                <li>Kübaj Hesabı</li>
+                <li>Objeleri Sorgulama (Query)</li>
+                <li>Tabaka (Layer) Yönetimi</li>
+                <li>Tabaka Renk ve Stil Ayarları</li>
+                <li>Tabaka Kilitleme ve Gizleme</li>
+                <li>Tabaka Arama</li>
+                <li>Kaydır (Move)</li>
+                <li>Döndür (Rotate)</li>
+                <li>Ölçekle (Scale)</li>
+                <li>Uzat (Extend)</li>
+                <li>ITRF Dönüşümü ve Koordinat Ayarları</li>
+                <li>DXF İçe Aktar (Import)</li>
+                <li>DXF Dışa Aktar (Export)</li>
+                <li>Raster (Görüntü) Yükleme ve Yönetimi</li>
+                <li>Mini Harita (Mini Map)</li>
+                <li>Geri Al (Undo) / İleri Al (Redo)</li>
+                <li>Nokta Editörü</li>
+                <li>Tarama (Hatch) Stilleri</li>
+                <li>Dinamik Etiket ve Bilgi Panelleri</li>
+                <li>Zoom ve Pan (Gezinme) Araçları</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    let layers = [{ id: Date.now(), name: 'HALİHAZIR', color: '#ff0000', visible: true, locked: false, showPointNames: true, kod: { active: false, name: '' }, area: { active: false, name: '' }, fill: true, thickness: 2, hatchType: 'diagonal' }];
+    let activeLayerId = layers[0].id, showCoordsGlobal = true, currentMode = null, subMode = 'mouse', pointCount = 0;
+    let itrfSettings = { active: false, dy: 500000, dx: 4000000, rot: 0, scale: 1 };
+    
+    const symbols = {
+        'pole': { name: 'Direk', svg: '<line x1="0" y1="8" x2="0" y2="-8" stroke="currentColor" stroke-width="1.5"/><line x1="-3" y1="-6" x2="3" y2="-6" stroke="currentColor"/><line x1="-3" y1="-3" x2="3" y2="-3" stroke="currentColor"/>' },
+        'tree': { name: 'Ağaç', svg: '<rect x="-1" y="2" width="2" height="6" fill="currentColor"/><path d="M-5,2 C-8,-4 0,-9 8,2 C5,6 -5,6 -5,2" fill="none" stroke="currentColor"/>' },
+        'manhole': { name: 'Rögar', svg: '<circle cx="0" cy="0" r="5" fill="none" stroke="currentColor"/><text x="0" y="2" font-size="5" text-anchor="middle" fill="currentColor" stroke="none">R</text>' },
+        'north': { name: 'Kuzey', svg: '<path d="M0,8 L-3,-2 L0,-8 L3,-2 Z" fill="none" stroke="currentColor"/><text x="0" y="14" font-size="5" text-anchor="middle" fill="currentColor" stroke="none">K</text>' }
+    };
+    let currentSymbol = null;
+
+    let translateX = 0, translateY = 0, scale = 1, isDragging = false, startX, startY, linePoints = [], currentPolyline = null, currentPolygon = null, leftPolyline = null, rightPolyline = null, currentGroupId = null, undoStack = [], redoStack = [], allPoints = [], snapSettings = { end: false, mid: false, int: false };
+    
+    let measureFrozen = false;
+
+    const container = document.getElementById('canvas-container'), canvas = document.getElementById('drawing-canvas'), svgLayer = document.getElementById('svg-layer'), coordDisplay = document.getElementById('coord-display'), measureOutput = document.getElementById('measure-output'), rubberBand = document.getElementById('rubber-band'), paraBandLeft = document.getElementById('para-band-left'), paraBandRight = document.getElementById('para-band-right'), highlightLine = document.getElementById('highlight-line'), highlightPoly = document.getElementById('highlight-poly'), snapIndicator = document.getElementById('snap-indicator'), measureLineUI = document.getElementById('measure-line-ui'), measurePolyUI = document.getElementById('measure-poly-ui'), dynamicLabel = document.getElementById('dynamic-measure-label');
+    let advState = { obj: null, base: null, segIdx: -1, type: null };
+
+    function toggleSnapMenu() { const m = document.getElementById('snap-menu'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; }
+    function toggleSnapOption(o) { snapSettings[o] = !snapSettings[o]; document.getElementById('snap-' + o).classList.toggle('active', snapSettings[o]); }
+    function intersect(x1, y1, x2, y2, x3, y3, x4, y4) { const d = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1); if (d == 0) return null; const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / d, ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / d; return (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) ? { x: x1 + ua * (x2 - x1), y: y1 + ua * (y2 - y1) } : null; }
+    function getAllSegments() { const s = []; document.querySelectorAll('polyline, polygon').forEach(o => { if (o.id.includes('band') || o.id.includes('highlight') || o.id.includes('measure') || o.classList.contains('hatch-line')) return; const pts = getPointsArray(o); for (let i = 0; i < pts.length - 1; i++) s.push({ p1: pts[i], p2: pts[i+1] }); if (o.tagName === 'polygon' && pts.length > 2) s.push({ p1: pts[pts.length-1], p2: pts[0] }); }); return s; }
+    function calculateSnap(rx, ry) { let best = null, min = 15 / scale; if (snapSettings.end) allPoints.forEach(p => { const d = Math.sqrt((rx-p.x)**2 + (ry-p.y)**2); if (d < min) { min = d; best = { x: p.x, y: p.y }; } }); if (snapSettings.mid) getAllSegments().forEach(s => { const mx = (s.p1.x + s.p2.x)/2, my = (s.p1.y + s.p2.y)/2, d = Math.sqrt((rx-mx)**2 + (ry-my)**2); if (d < min) { min = d; best = { x: mx, y: my }; } }); if (snapSettings.int) { const segs = getAllSegments(); for (let i = 0; i < segs.length; i++) for (let j = i+1; j < segs.length; j++) { const pt = intersect(segs[i].p1.x, segs[i].p1.y, segs[i].p2.x, segs[i].p2.y, segs[j].p1.x, segs[j].p1.y, segs[j].p2.x, segs[j].p2.y); if (pt) { const d = Math.sqrt((rx-pt.x)**2 + (ry-pt.y)**2); if (d < min) { min = d; best = { x: pt.x, y: pt.y }; } } } } return best; }
+
+    function importDXF(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const lines = e.target.result.split(/\r?\n/).map(l => l.trim());
+            let i = 0, current = null, data = {}, added = [];
+            while (i < lines.length) {
+                if (lines[i] === "0" && ["SECTION", "TABLE", "LAYER", "POINT", "LINE", "LWPOLYLINE", "ENDSEC", "ENDTAB", "EOF"].includes(lines[i+1])) {
+                    if (current) {
+                        if (current === "LAYER") processDXFLayer(data);
+                        else if (["POINT", "LINE", "LWPOLYLINE"].includes(current)) {
+                            const el = processDXFEntity(current, data);
+                            if (el) added.push(...(Array.isArray(el)?el:[el]));
+                        }
+                    }
+                    if (lines[i+1] === "EOF") break;
+                    current = lines[i+1];
+                    data = { vertices: [] };
+                    i += 2;
+                } else {
+                    let c = lines[i], v = lines[i+1];
+                    if (c === "8") data.layer = v;
+                    if (c === "1001") data.appId = v;
+                    if (c === "1000" && data.appId === "NETCAD_SIM_DATA") data.customJson = v;
+                    if (current === "LAYER") {
+                        if (c === "2") data.name = v;
+                        if (c === "62") data.color = v;
+                    }
+                    if (c === "10") data.x = parseFloat(v);
+                    if (c === "20") data.y = -parseFloat(v);
+                    if (c === "30") data.z = parseFloat(v);
+                    if (c === "11") data.x2 = parseFloat(v);
+                    if (c === "21") data.y2 = -parseFloat(v);
+                    if (c === "70") data.closed = v;
+                    if (c === "10" && current === "LWPOLYLINE" && lines[i+2] === "20") data.vertices.push({x: parseFloat(v), y: -parseFloat(lines[i+3])});
+                    i += 2;
+                }
+            }
+            if (added.length > 0 || layers.length > 1) { 
+                saveState('dxf_import', added); 
+                layers.forEach(l => updateLayerStyles(l.id));
+                renderLayers(); 
+                updateMiniMap();
+                alert("DXF yüklendi."); 
+            }
+            input.value = "";
+        };
+        reader.readAsText(file);
+    }
+    function processDXFLayer(data) {
+        if (!data.name) return;
+        const name = data.name.toUpperCase();
+        let l = layers.find(lay => lay.name === name);
+        if (data.customJson) {
+            try {
+                const custom = JSON.parse(data.customJson);
+                if (l) { Object.assign(l, custom); l.id = l.id || Date.now(); }
+                else { l = { ...custom, id: Date.now() + Math.random(), name: name }; layers.push(l); }
+                return;
+            } catch (e) { console.error("JSON parse error", e); }
+        }
+        if (!l) {
+            const colors = { '1':'#ff0000', '2':'#ffff00', '3':'#00ff00', '4':'#00ffff', '5':'#0000ff', '6':'#ff00ff', '7':'#000000' };
+            l = { id: Date.now() + Math.random(), name: name, color: colors[data.color] || '#000000', visible: true, locked: false, showPointNames: true, kod: { active: false, name: '' }, area: { active: false, name: '' }, fill: true, thickness: 2, hatchType: 'diagonal' };
+            layers.push(l);
+        }
+    }
+    function processDXFEntity(type, data) { 
+        let l = layers.find(l => l.name === (data.layer || "0").toUpperCase()); 
+        if (!l) { l = { id: Date.now() + Math.random(), name: (data.layer || "0").toUpperCase(), color: '#000000', visible: true, locked: false, showPointNames: true, kod: { active: false, name: '' }, area: { active: false, name: '' }, fill: true, thickness: 2, hatchType: 'diagonal' }; layers.push(l); } 
+        activeLayerId = l.id; 
+        let el = null;
+        if (type === "POINT") { document.getElementById('inp-z').value = data.z || 0; el = createPoint(data.x, data.y); } 
+        else if (type === "LINE") { const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); pl.setAttribute("data-layer-id", l.id); pl.setAttribute("fill", "none"); pl.setAttribute("stroke", l.color); pl.setAttribute("stroke-width", l.thickness); pl.setAttribute("points", `${data.x},${data.y} ${data.x2},${data.y2}`); svgLayer.appendChild(pl); el = pl; } 
+        else if (type === "LWPOLYLINE") { const isC = (data.closed & 1), tag = isC ? "polygon" : "polyline"; el = document.createElementNS("http://www.w3.org/2000/svg", tag); el.setAttribute("data-layer-id", l.id); el.setAttribute("stroke", l.color); el.setAttribute("stroke-width", l.thickness); el.setAttribute("fill", isC && l.fill ? hexToRgba(l.color, 0.2) : "none"); if(isC) el.setAttribute("data-fill-type", "filled"); el.setAttribute("points", data.vertices.map(v => `${v.x},${v.y}`).join(" ")); svgLayer.appendChild(el); } 
+        
+        if (el && data.customJson) {
+            try {
+                const custom = JSON.parse(data.customJson);
+                if (custom.fillType) el.setAttribute('data-fill-type', custom.fillType);
+                if (custom.volume) el.setAttribute('data-volume', custom.volume);
+                if (custom.rotation) el.setAttribute('data-rotation', custom.rotation);
+            } catch(e) {}
+        }
+        return el; 
+    }
+    function exportToDXF() {
+        let dxf = "0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n";
+        layers.forEach(l => {
+            dxf += `0\nLAYER\n2\n${l.name}\n70\n0\n62\n7\n6\nCONTINUOUS\n`;
+            dxf += "1001\nNETCAD_SIM_DATA\n1002\n{\n";
+            const lData = { color: l.color, kod: l.kod, area: l.area, fill: l.fill, thickness: l.thickness, hatchType: l.hatchType, visible: l.visible, locked: l.locked, showPointNames: l.showPointNames };
+            dxf += `1000\n${JSON.stringify(lData)}\n1002\n}\n`;
+        });
+        dxf += "0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n";
+        allPoints.forEach(p => { const l = layers.find(l => l.id == p.el.getAttribute('data-layer-id')); dxf += `0\nPOINT\n8\n${l?l.name:'0'}\n10\n${p.x}\n20\n${-p.y}\n30\n${p.z}\n`; });
+        document.querySelectorAll('polyline, polygon').forEach(o => { 
+            if (o.id.includes('band') || o.id.includes('measure') || o.id.includes('highlight') || o.classList.contains('hatch-line')) return; 
+            const l = layers.find(l => l.id == o.getAttribute('data-layer-id')), pts = getPointsArray(o); 
+            if(pts.length < 2) return; 
+            dxf += `0\nLWPOLYLINE\n8\n${l?l.name:'0'}\n90\n${pts.length}\n70\n${o.tagName==='polygon'?1:0}\n`; 
+            
+            const eData = {};
+            if (o.hasAttribute('data-fill-type')) eData.fillType = o.getAttribute('data-fill-type');
+            if (o.hasAttribute('data-volume')) eData.volume = o.getAttribute('data-volume');
+            if (o.hasAttribute('data-rotation')) eData.rotation = o.getAttribute('data-rotation');
+            if (Object.keys(eData).length > 0) {
+                dxf += "1001\nNETCAD_SIM_DATA\n1002\n{\n";
+                dxf += `1000\n${JSON.stringify(eData)}\n`;
+                dxf += "1002\n}\n";
+            }
+            
+            pts.forEach(pt => { dxf += `10\n${pt.x}\n20\n${-pt.y}\n`; }); 
+        });
+        dxf += "0\nENDSEC\n0\nEOF";
+        const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([dxf], { type: 'application/dxf' })); link.download = `Netcad_${Date.now()}.dxf`; link.click();
+    }
+
+    function toggleToolbar() { const tb = document.getElementById('toolbar'), c = document.getElementById('toolbar-content'), l = document.getElementById('minimized-label'), b = document.getElementById('btn-minimize'); if (tb.classList.contains('minimized')) { tb.classList.remove('minimized'); c.style.display = 'block'; l.style.display = 'none'; b.innerText = '_'; } else { tb.classList.add('minimized'); c.style.display = 'none'; l.style.display = 'block'; b.innerText = '□'; } }
+    function saveState(type, data) {
+        if (type === 'break') {
+            undoStack.push({ type: type, state: data });
+        } else {
+            undoStack.push({ type: type, elements: [...data] });
+        }
+        redoStack = [];
+        updateMiniMap();
+    }
+    function undo() {
+        if (undoStack.length === 0) return;
+        const last = undoStack.pop();
+        const isCreation = last.type.startsWith('add') || last.type === 'draw' || last.type === 'dxf_import' || last.type === 'extend_create';
+
+        if (isCreation) { // Undo an ADD by REMOVING
+            last.elements.forEach(el => { if (el.parentNode) el.parentNode.removeChild(el); if (el.classList.contains('point-wrapper')) allPoints = allPoints.filter(p => p.el !== el); });
+        } else if (last.type.startsWith('delete')) { // Undo a DELETE by ADDING
+            last.elements.forEach(el => {
+                if (el.classList.contains('point-wrapper')) { canvas.appendChild(el); const pId = el.getAttribute('data-id'); if (!allPoints.some(p => p.id == pId)) allPoints.push({ id: pId, x: parseFloat(el.getAttribute('data-x')), y: parseFloat(el.getAttribute('data-y')), z: parseFloat(el.getAttribute('data-z')), el }); } 
+                else { svgLayer.appendChild(el); }
+            });
+        } else if (last.type === 'break') {
+            last.state.added.forEach(el => el.remove());
+            last.state.removed.forEach(el => svgLayer.appendChild(el));
+        }
+        redoStack.push(last); renderPointList(); updateMiniMap();
+    }
+    function redo() {
+        if (redoStack.length === 0) return;
+        const a = redoStack.pop();
+        const isCreation = a.type.startsWith('add') || a.type === 'draw' || a.type === 'dxf_import' || a.type === 'extend_create';
+
+        if (isCreation) { // Redo an ADD by ADDING
+            a.elements.forEach(el => {
+                if (el.classList.contains('point-wrapper')) { canvas.appendChild(el); const pId = el.getAttribute('data-id'); if (!allPoints.some(p => p.id == pId)) allPoints.push({ id: pId, x: parseFloat(el.getAttribute('data-x')), y: parseFloat(el.getAttribute('data-y')), z: parseFloat(el.getAttribute('data-z')), el }); } 
+                else { svgLayer.appendChild(el); }
+            });
+        } else if (a.type.startsWith('delete')) { // Redo a DELETE by REMOVING
+            a.elements.forEach(el => { if (el.parentNode) el.parentNode.removeChild(el); if (el.classList.contains('point-wrapper')) allPoints = allPoints.filter(p => p.el !== el); });
+        } else if (a.type === 'break') {
+            a.state.removed.forEach(el => el.remove()); a.state.added.forEach(el => svgLayer.appendChild(el));
+        }
+        undoStack.push(a); renderPointList(); updateMiniMap();
+    }
+    function getActiveLayer() { return layers.find(l => l.id === activeLayerId); }
+    function renderLayers() { const filter = document.getElementById('layer-search-input') ? document.getElementById('layer-search-input').value.toUpperCase() : ""; const c = document.getElementById('layer-list-container'); c.innerHTML = ''; layers.forEach(l => { if (filter && !l.name.includes(filter)) return; const r = document.createElement('div'); r.className = `layer-row ${l.id === activeLayerId ? 'active-layer' : ''}`; r.onclick = () => { activeLayerId = l.id; renderLayers(); }; r.innerHTML = `<div class="layer-name">${l.name}</div><div class="layer-controls" onclick="event.stopPropagation()"><div class="color-box" style="background:${l.color};" onclick="triggerColorPicker(${l.id})"></div><div class="layer-btn" onclick="toggleLayerVisibility(${l.id})">${l.visible?"👁️":"🕶️"}</div><div class="layer-btn" onclick="toggleLayerLock(${l.id})">${l.locked?"🔒":"🔓"}</div><div class="layer-btn" onclick="togglePointNames(${l.id})">123</div><div class="layer-btn" style="background:${l.kod.active?'#ffcc00':'#eee'}" onclick="handleKod(${l.id})" ondblclick="changeKodName(${l.id})">KOD</div><div class="layer-btn" style="background:${l.area.active?'#ffcc00':'#eee'}" onclick="handleAreaName(${l.id})" ondblclick="changeAreaNameText(${l.id})">A</div><div class="layer-btn" onclick="toggleFill(${l.id})">${l.fill?"⬜":"---"}</div><div class="layer-btn" onclick="changeThickness(${l.id})">${l.thickness}</div><div class="layer-btn" onclick="toggleHatchSelect(${l.id})">▧</div></div>`; c.appendChild(r); }); }
+    function clearLayerSearch() { const i = document.getElementById('layer-search-input'); if(i) { i.value = ''; renderLayers(); } }
+    function togglePointNames(id) { layers.find(l => l.id === id).showPointNames = !layers.find(l => l.id === id).showPointNames; refreshLayerLabels(id); }
+    function toggleCoords() { showCoordsGlobal = !showCoordsGlobal; document.getElementById('btn-toggle-coords').classList.toggle('active', showCoordsGlobal); layers.forEach(l => refreshLayerLabels(l.id)); }
+    function handleKod(id) { const l = layers.find(l => l.id === id); if (!l.kod.active) { const n = prompt("Kod:"); if (n) { l.kod.name = n; l.kod.active = true; } } else l.kod.active = false; refreshLayerLabels(id); renderLayers(); }
+    function changeKodName(id) { const l = layers.find(l => l.id === id); const n = prompt("Kod Değiştir:", l.kod.name); if (n) { l.kod.name = n; refreshLayerLabels(id); } }
+    function handleAreaName(id) { const l = layers.find(l => l.id === id); if (!l.area.active) { const n = prompt("Alan İsmi:"); if (n) { l.area.name = n; l.area.active = true; } } else l.area.active = false; updateLayerStyles(id); renderLayers(); }
+    function changeAreaNameText(id) { const l = layers.find(l => l.id === id); const n = prompt("Alan İsmi Değiştir:", l.area.name); if (n) { l.area.name = n; updateLayerStyles(id); } }
+    function toggleFill(id) { const l = layers.find(l => l.id === id); l.fill = !l.fill; updateLayerStyles(id); renderLayers(); }
+    function changeThickness(id) { const l = layers.find(l => l.id === id); const t = prompt("Kalınlık:", l.thickness); if(t) { l.thickness = t; updateLayerStyles(id); renderLayers(); } }
+    function togglePointEditor() { const p = document.getElementById('point-editor'); p.style.display = p.style.display === 'block' ? 'none' : 'block'; if(p.style.display === 'block') renderPointList(); }
+
+    function toggleSymbolPalette() { const p = document.getElementById('symbol-palette'); p.style.display = p.style.display === 'block' ? 'none' : 'block'; if (p.style.display === 'block') renderSymbolPalette(); }
+    function renderSymbolPalette() { const c = document.getElementById('symbol-list'); c.innerHTML = ''; for (let k in symbols) { const s = symbols[k]; const b = document.createElement('div'); b.className = `symbol-btn ${currentSymbol === k ? 'active' : ''}`; b.onclick = () => selectSymbol(k); b.innerHTML = `<svg viewBox="-10 -10 20 20" style="stroke:black; fill:black;">${s.svg}</svg><span>${s.name}</span>`; c.appendChild(b); } }
+    function selectSymbol(k) { currentSymbol = k; if (currentMode !== 'symbol') setMode('symbol'); renderSymbolPalette(); }
+    function placeSymbol(x, y) {
+        if (!currentSymbol) return;
+        const l = getActiveLayer();
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("transform", `translate(${x}, ${y})`);
+        g.setAttribute("data-layer-id", l.id);
+        g.setAttribute("class", "map-symbol");
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString('<svg xmlns="http://www.w3.org/2000/svg">' + symbols[currentSymbol].svg + '</svg>', 'image/svg+xml');
+        while (doc.documentElement.firstChild) {
+            g.appendChild(doc.documentElement.firstChild);
+        }
+        if (!l.visible) g.classList.add('layer-hidden');
+
+        updateSymbolColor(g, l.color);
+        svgLayer.appendChild(g);
+        saveState('add_symbol', [g]);
+    }
+    function updateSymbolColor(g, color) { g.style.color = color; g.querySelectorAll('*').forEach(el => { if (el.getAttribute('stroke') === 'currentColor') el.setAttribute('stroke', color); if (el.getAttribute('fill') === 'currentColor') el.setAttribute('fill', color); }); }
+
+    function toggleRasterModal() { const m = document.getElementById('raster-modal'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
+    function toggleAdvancedMenu() { const m = document.getElementById('advanced-menu'); m.style.display = (m.style.display === 'flex') ? 'none' : 'flex'; }
+    function addRaster(mode) {
+        const fileInput = document.getElementById('raster-file-input');
+        const file = fileInput.files[0];
+        if (!file) return alert("Lütfen bir dosya seçin");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const url = e.target.result;
+            const img = new Image();
+            img.onload = () => {
+                const g = document.getElementById('raster-group'); g.innerHTML = '';
+                const svgImg = document.createElementNS("http://www.w3.org/2000/svg", "image");
+                svgImg.setAttribute("href", url);
+                const rect = container.getBoundingClientRect(), viewW = rect.width / scale, viewH = rect.height / scale, viewX = -translateX / scale, viewY = -translateY / scale;
+                let x, y, w, h;
+                if (mode === 'fit') {
+                    const imgRatio = img.width / img.height, viewRatio = viewW / viewH;
+                    if (imgRatio > viewRatio) { w = viewW; h = w / imgRatio; } else { h = viewH; w = h * imgRatio; }
+                    x = viewX + (viewW - w) / 2; y = viewY + (viewH - h) / 2;
+                } else {
+                    w = img.width; h = img.height; x = viewX + (viewW - w) / 2; y = viewY + (viewH - h) / 2;
+                }
+                svgImg.setAttribute("x", x); svgImg.setAttribute("y", y); svgImg.setAttribute("width", w); svgImg.setAttribute("height", h);
+                svgImg.setAttribute("opacity", document.getElementById('raster-opacity-range').value / 100);
+                g.appendChild(svgImg); toggleRasterModal();
+            }; img.onerror = () => alert("Resim yüklenemedi."); img.src = url;
+        }; reader.readAsDataURL(file);
+    }
+    function updateRasterOpacity(val) { document.getElementById('raster-opacity-val').innerText = val + '%'; const g = document.getElementById('raster-group'); if (g.firstChild) g.firstChild.setAttribute("opacity", val / 100); }
+    function clearRaster() { document.getElementById('raster-group').innerHTML = ''; }
+
+    function toggleITRFModal() { const m = document.getElementById('itrf-modal'); m.style.display = m.style.display === 'block' ? 'none' : 'block'; }
+    function updateITRFSettings() {
+        itrfSettings.active = document.getElementById('itrf-active').checked;
+        itrfSettings.dy = parseFloat(document.getElementById('itrf-dy').value) || 0; // Sağa (Easting) usually Y in TR
+        itrfSettings.dx = parseFloat(document.getElementById('itrf-dx').value) || 0; // Yukarı (Northing) usually X in TR
+        itrfSettings.rot = parseFloat(document.getElementById('itrf-rot').value) || 0;
+        itrfSettings.scale = parseFloat(document.getElementById('itrf-scale').value) || 1;
+        toggleITRFModal();
+    }
+    function calculateITRF(x, y) {
+        // SVG y is positive down. Cartesian y is positive up.
+        const localX = x; const localY = -y;
+        const rad = itrfSettings.rot * Math.PI / 180;
+        const rotX = localX * Math.cos(rad) - localY * Math.sin(rad);
+        const rotY = localX * Math.sin(rad) + localY * Math.cos(rad);
+        return { y: (rotX * itrfSettings.scale) + itrfSettings.dy, x: (rotY * itrfSettings.scale) + itrfSettings.dx };
+    }
+
+    function renderPointList() { const c = document.getElementById('point-list-container'); c.innerHTML = ''; allPoints.forEach((p, idx) => { const r = document.createElement('div'); r.className = 'point-edit-row'; r.innerHTML = `<span style="width:30px; font-weight:bold;">P${p.id}</span>X: <input type="number" step="0.01" value="${p.x}" id="ed-x-${idx}">Y: <input type="number" step="0.01" value="${p.y}" id="ed-y-${idx}">Z: <input type="number" step="0.01" value="${p.z}" id="ed-z-${idx}"><button onclick="updatePointCoord(${idx})" style="width:40px; padding:2px; margin:0">Ok</button><button onclick="focusOnPoint(${p.x}, ${p.y})" style="width:25px; padding:2px; margin:0">🎯</button>`; c.appendChild(r); }); }
+    function updatePointCoord(idx) { const nX = parseFloat(document.getElementById(`ed-x-${idx}`).value), nY = parseFloat(document.getElementById(`ed-y-${idx}`).value), nZ = parseFloat(document.getElementById(`ed-z-${idx}`).value).toFixed(2), p = allPoints[idx], oX = p.x, oY = p.y; p.x = nX; p.y = nY; p.z = nZ; p.el.style.left = nX + 'px'; p.el.style.top = nY + 'px'; p.el.setAttribute('data-x', nX.toFixed(2)); p.el.setAttribute('data-y', nY.toFixed(2)); p.el.setAttribute('data-z', nZ); refreshLayerLabels(p.el.getAttribute('data-layer-id')); const gId = p.el.getAttribute('data-group-id'); if (gId) { const gPts = Array.from(document.querySelectorAll(`.point-wrapper[data-group-id="${gId}"]`)).sort((a, b) => parseInt(a.getAttribute('data-id')) - parseInt(b.getAttribute('data-id'))).map(el => ({ x: parseFloat(el.getAttribute('data-x')), y: parseFloat(el.getAttribute('data-y')) })); document.querySelectorAll(`polyline[data-group-id="${gId}"]`).forEach(l => l.setAttribute("points", calculateParallelPoints(gPts, parseFloat(l.getAttribute('data-para-dist'))).join(" "))); } document.querySelectorAll('polyline, polygon').forEach(o => { if (o.id.includes('highlight') || o.id.includes('band') || o.hasAttribute('data-group-id') || o.id.includes('measure') || o.classList.contains('hatch-line')) return; let pts = getPointsArray(o), changed = false; pts.forEach(pt => { if (Math.abs(pt.x - oX) < 0.01 && Math.abs(pt.y - oY) < 0.01) { pt.x = nX; pt.y = nY; changed = true; } }); if (changed) { o.setAttribute("points", pts.map(pt => `${pt.x},${pt.y}`).join(" ")); updateLayerStyles(o.getAttribute('data-layer-id')); } }); renderPointList(); updateMiniMap(); }
+    function calculateParallelPoints(pts, dist) { let res = []; for (let i = 0; i < pts.length; i++) { let p = pts[i], ang; if (i === 0) ang = Math.atan2(pts[1].y - p.y, pts[1].x - p.x) + Math.PI/2; else if (i === pts.length-1) ang = Math.atan2(p.y - pts[i-1].y, p.x - pts[i-1].x) + Math.PI/2; else { let a1 = Math.atan2(p.y-pts[i-1].y, p.x-pts[i-1].x), a2 = Math.atan2(pts[i+1].y-p.y, pts[i+1].x-p.x), bisect = (a1+a2)/2 + Math.PI/2, mLen = dist / Math.cos((a2-a1)/2); res.push(`${p.x + mLen*Math.cos(bisect)},${p.y + mLen*Math.sin(bisect)}`); continue; } res.push(`${p.x + dist*Math.cos(ang)},${p.y + dist*Math.sin(ang)}`); } return res; }
+    function addNewLayer() { const name = prompt("Tabaka Adı:"); if (name) { layers.push({ id: Date.now(), name: name.toUpperCase(), color: '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0'), visible: true, locked: false, showPointNames: true, kod: { active: false, name: '' }, area: { active: false, name: '' }, fill: true, thickness: 2, hatchType: 'diagonal' }); activeLayerId = layers[layers.length-1].id; renderLayers(); } }
+    function deleteActiveLayer() { if (layers.length <= 1) return; if (confirm("Silinsin mi?")) { const els = Array.from(document.querySelectorAll(`[data-layer-id="${activeLayerId}"]`)); saveState('delete_layer', els); els.forEach(el => { el.remove(); allPoints = allPoints.filter(p => p.el !== el); }); layers = layers.filter(l => l.id !== activeLayerId); activeLayerId = layers[0].id; renderLayers(); renderPointList(); updateMiniMap(); } }
+    function toggleLayerManager() { const mgr = document.getElementById('layer-manager'); mgr.style.display = mgr.style.display === 'block' ? 'none' : 'block'; if(mgr.style.display === 'block') renderLayers(); }
+    function triggerColorPicker(id) { activeLayerId = id; document.getElementById('hidden-color-picker').click(); }
+    function changeLayerColor(c) { const l = getActiveLayer(); if(l && c) { l.color = c; updateLayerStyles(l.id); renderLayers(); } }
+    function toggleLayerVisibility(id) { const l = layers.find(l => l.id === id); l.visible = !l.visible; document.querySelectorAll(`[data-layer-id="${id}"]`).forEach(el => el.classList.toggle('layer-hidden', !l.visible)); renderLayers(); }
+    function toggleLayerLock(id) { layers.find(l => l.id === id).locked = !layers.find(l => l.id === id).locked; renderLayers(); }
+
+    function updateLayerStyles(id) {
+        const l = layers.find(l => l.id == id);
+        
+        let patId = `pat-${l.id}`;
+        let pat = document.getElementById(patId);
+        if (!pat) {
+            pat = document.createElementNS("http://www.w3.org/2000/svg", "pattern");
+            pat.setAttribute("id", patId);
+            pat.setAttribute("patternUnits", "userSpaceOnUse");
+            svgLayer.querySelector('defs').appendChild(pat);
+        }
+        updatePatternDefinition(pat, l.hatchType || 'diagonal', l.color, 0);
+
+        document.querySelectorAll(`.hatch-line[data-layer-id="${id}"]`).forEach(hl => hl.remove());
+
+        document.querySelectorAll(`polyline[data-layer-id="${id}"]`).forEach(p => { p.setAttribute('stroke', l.color); p.setAttribute('stroke-width', l.thickness); });
+        document.querySelectorAll(`.area-label[data-layer-id="${id}"]`).forEach(la => la.remove());
+        document.querySelectorAll(`polygon[data-layer-id="${id}"]`).forEach(p => {
+            p.setAttribute('stroke', l.color); p.setAttribute('stroke-width', l.thickness);
+            
+            if (!p.hasAttribute('data-fill-type')) { if (p.getAttribute('fill') && p.getAttribute('fill').includes('url(#hatch)')) p.setAttribute('data-fill-type', 'hatched'); else p.setAttribute('data-fill-type', 'filled'); }
+            
+            if(l.fill) { 
+                if (p.getAttribute('data-fill-type') === 'hatched') {
+                    if (l.hatchType === 'sacak') {
+                        p.setAttribute('fill', 'none');
+                        drawSacakHatch(p, l);
+                    } else {
+                        const rotation = parseFloat(p.getAttribute('data-rotation')) || 0;
+                        if (rotation !== 0) {
+                            let polyPatId = p.getAttribute('data-pattern-id');
+                            if (!polyPatId) {
+                                polyPatId = `poly-pat-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                                p.setAttribute('data-pattern-id', polyPatId);
+                            }
+                            let polyPat = document.getElementById(polyPatId);
+                            if (!polyPat) {
+                                polyPat = document.createElementNS("http://www.w3.org/2000/svg", "pattern");
+                                polyPat.setAttribute("id", polyPatId);
+                                polyPat.setAttribute("patternUnits", "userSpaceOnUse");
+                                svgLayer.querySelector('defs').appendChild(polyPat);
+                            }
+                            updatePatternDefinition(polyPat, l.hatchType || 'diagonal', l.color, rotation);
+                            p.setAttribute('fill', `url(#${polyPatId})`);
+                        } else {
+                            p.setAttribute('fill', `url(#${patId})`);
+                        }
+                    }
+                } else {
+                    p.setAttribute('fill', l.area.active ? 'rgba(0,100,255,0.3)' : hexToRgba(l.color, 0.2)); 
+                }
+            } else {
+                p.setAttribute('fill', 'none');
+            }
+            
+            const vol = p.getAttribute('data-volume');
+            if ((l.area.active && l.area.name) || vol) {
+                const pts = getPointsArray(p), c = getPolygonCentroid(pts), label = document.createElement('div');
+                label.className = 'area-label'; label.setAttribute('data-layer-id', id); 
+                let content = ''; if (l.area.active && l.area.name) content += `<div>${l.area.name}</div>`; if (vol) content += `<div style="font-size:11px; font-weight:normal;">V=${vol} m³</div>`;
+                label.innerHTML = content; label.style.textAlign = 'center';
+                label.style.left = c.x + 'px'; label.style.top = c.y + 'px'; label.style.color = l.color; label.classList.toggle('layer-hidden', !l.visible); canvas.appendChild(label);
+            }
+        });
+        document.querySelectorAll(`.map-symbol[data-layer-id="${id}"]`).forEach(s => updateSymbolColor(s, l.color));
+        document.querySelectorAll(`.point-wrapper[data-layer-id="${id}"]`).forEach(pw => pw.querySelector('.point').style.backgroundColor = l.color);
+    }
+
+    // YENİ: SAÇAK TARAMA FONKSİYONU (Resimdeki gibi)
+    function drawSacakHatch(polygon, layer) {
+        const pts = getPointsArray(polygon);
+        const sacakLen = 10; // Çizgi boyu
+        const interval = 12; // Çizgi aralığı
+        
+        for (let i = 0; i < pts.length; i++) {
+            let p1 = pts[i];
+            let p2 = pts[(i + 1) % pts.length];
+            
+            let dx = p2.x - p1.x;
+            let dy = p2.y - p1.y;
+            let len = Math.sqrt(dx*dx + dy*dy);
+            let angle = Math.atan2(dy, dx);
+            
+            // Kenar boyunca belirli aralıklarla çizgi at
+            for (let d = 0; d < len; d += interval) {
+                let ratio = d / len;
+                let currX = p1.x + dx * ratio;
+                let currY = p1.y + dy * ratio;
+                
+                // Kenara dik ve içeri bakan açı (Netcad Saçak Mantığı)
+                // Poligon saat yönü tersi ise içeri bakması için -90 derece (+ Math.PI/2 veya -45 gibi yamuk açı)
+                let hatchAngle = angle - (Math.PI / 4); // Resimdeki gibi 45 derece "yamuk" bakış
+                
+                let x2 = currX + Math.cos(hatchAngle) * sacakLen;
+                let y2 = currY + Math.sin(hatchAngle) * sacakLen;
+                
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                line.setAttribute("x1", currX); line.setAttribute("y1", currY);
+                line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+                line.setAttribute("stroke", layer.color);
+                line.setAttribute("stroke-width", "1");
+                line.setAttribute("class", "hatch-line");
+                line.setAttribute("data-layer-id", layer.id);
+                if (!layer.visible) line.classList.add('layer-hidden');
+                svgLayer.appendChild(line);
+            }
+        }
+    }
+
+    function updatePatternDefinition(pattern, type, color, rotation = 0) {
+        pattern.innerHTML = '';
+        pattern.setAttribute('width', '8'); pattern.setAttribute('height', '8'); pattern.setAttribute('patternTransform', '');
+        let baseRotate = 0;
+        if (type === 'diagonal' || type === 'cross') baseRotate = 45;
+        pattern.setAttribute('patternTransform', `rotate(${baseRotate + rotation})`);
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        line.setAttribute("stroke", color); line.setAttribute("stroke-width", "1"); line.setAttribute("fill", "none");
+        if (type === 'diagonal' || type === 'vertical') { line.setAttribute("d", "M0,0 L0,8"); }
+        else if (type === 'horizontal') { line.setAttribute("d", "M0,0 L8,0"); }
+        else if (type === 'grid') { line.setAttribute("d", "M0,0 L0,8 M0,0 L8,0"); }
+        else if (type === 'cross') { line.setAttribute("d", "M0,0 L0,8 M0,0 L8,0"); }
+        pattern.appendChild(line);
+    }
+
+    function toggleMiniMap() {
+        const m = document.getElementById('minimap');
+        m.style.display = m.style.display === 'block' ? 'none' : 'block';
+        if(m.style.display === 'block') updateMiniMap();
+    }
+
+    function updateMiniMap() {
+        const mSvg = document.getElementById('minimap-svg');
+        if(document.getElementById('minimap').style.display === 'none') return;
+        mSvg.innerHTML = '';
+        const defs = document.querySelector('defs').cloneNode(true); mSvg.appendChild(defs);
+        const contentGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        document.querySelectorAll('#svg-layer > *').forEach(el => {
+            if(el.tagName === 'defs' || el.id.includes('band') || el.id.includes('measure') || el.id.includes('highlight') || el.style.visibility === 'hidden') return;
+            contentGroup.appendChild(el.cloneNode(true));
+        });
+        mSvg.appendChild(contentGroup);
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const updateBounds = (x, y) => { if(x < minX) minX = x; if(x > maxX) maxX = x; if(y < minY) minY = y; if(y > maxY) maxY = y; };
+        allPoints.forEach(p => updateBounds(p.x, p.y));
+        document.querySelectorAll('#svg-layer polyline, #svg-layer polygon').forEach(el => {
+            if(el.id.includes('band') || el.id.includes('measure') || el.id.includes('highlight') || el.classList.contains('hatch-line')) return;
+            const pts = getPointsArray(el); pts.forEach(p => updateBounds(p.x, p.y));
+        });
+        if (minX === Infinity) { minX = 0; minY = 0; maxX = 100; maxY = 100; }
+        const pad = Math.max((maxX - minX), (maxY - minY)) * 0.1 || 10;
+        minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+        mSvg.setAttribute('viewBox', `${minX} ${minY} ${maxX - minX} ${maxY - minY}`);
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect"); rect.id = 'mini-view-rect'; mSvg.appendChild(rect);
+        updateMiniMapViewport();
+    }
+
+    function updateMiniMapViewport() {
+        const rect = document.getElementById('mini-view-rect'); if(!rect) return;
+        const r = container.getBoundingClientRect();
+        const vx = -translateX / scale, vy = -translateY / scale, vw = r.width / scale, vh = r.height / scale;
+        rect.setAttribute('x', vx); rect.setAttribute('y', vy); rect.setAttribute('width', vw); rect.setAttribute('height', vh);
+    }
+
+    let currentHatchLayerId = null;
+    function toggleHatchSelect(id) {
+        currentHatchLayerId = id;
+        document.getElementById('hatch-select-modal').style.display = 'block';
+        renderHatchOptions();
+    }
+    function closeHatchModal() { document.getElementById('hatch-select-modal').style.display = 'none'; }
+    function renderHatchOptions() {
+        const c = document.getElementById('hatch-options'); c.innerHTML = '';
+        const types = ['diagonal', 'vertical', 'horizontal', 'grid', 'cross', 'sacak'];
+        const l = layers.find(x => x.id === currentHatchLayerId);
+        types.forEach(t => {
+            const d = document.createElement('div'); d.className = `hatch-btn ${l.hatchType === t ? 'active' : ''}`; d.onclick = () => selectHatch(t);
+            let pathD = '', transform = '';
+            if (t === 'diagonal') { transform = 'rotate(45, 10, 10)'; pathD = 'M0,0 L20,20 M10,0 L30,20 M-10,0 L10,20'; }
+            else if (t === 'vertical') { pathD = 'M5,0 L5,20 M10,0 L10,20 M15,0 L15,20'; }
+            else if (t === 'horizontal') { pathD = 'M0,5 L20,5 M0,10 L20,10 M0,15 L20,15'; }
+            else if (t === 'grid') { pathD = 'M5,0 L5,20 M10,0 L10,20 M15,0 L15,20 M0,5 L20,5 M0,10 L20,10 M0,15 L20,15'; }
+            else if (t === 'cross') { transform = 'rotate(45, 10, 10)'; pathD = 'M5,0 L5,20 M10,0 L10,20 M15,0 L15,20 M0,5 L20,5 M0,10 L20,10 M0,15 L20,15'; }
+            else if (t === 'sacak') { pathD = 'M2,2 L8,8 M6,2 L12,8 M10,2 L16,8 M14,2 L20,8'; }
+            d.innerHTML = `<svg viewBox="0 0 20 20"><path d="${pathD}" stroke="black" stroke-width="1" transform="${transform}"/></svg>`;
+            c.appendChild(d);
+        });
+    }
+    function selectHatch(t) {
+        if(currentHatchLayerId) {
+            const l = layers.find(x => x.id === currentHatchLayerId); l.hatchType = t;
+            updateLayerStyles(l.id); renderLayers();
+        } closeHatchModal();
+    }
+
+    function hexToRgba(h, a) { const r = parseInt(h.slice(1, 3), 16), g = parseInt(h.slice(3, 5), 16), b = parseInt(h.slice(5, 7), 16); return `rgba(${r}, ${g}, ${b}, ${a})`; }
+    function refreshLayerLabels(id) { const l = layers.find(l => l.id == id); if(!l) return; document.querySelectorAll(`.point-wrapper[data-layer-id="${id}"]`).forEach(p => { const pid = p.getAttribute('data-id'), x = p.getAttribute('data-x'), y = p.getAttribute('data-y'), z = p.getAttribute('data-z') || "0.00", label = p.querySelector('.point-label'); label.style.color = l.color; let pts = []; if (l.showPointNames) pts.push(`P${pid}`); if (l.kod.active && l.kod.name) pts.push(l.kod.name); if (showCoordsGlobal) pts.push(`(${x}, ${y}, ${z})`); label.style.display = pts.length === 0 ? 'none' : 'block'; label.innerText = pts.join(" "); }); }
+    function getPolygonCentroid(pts) { let x = 0, y = 0, a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { let f = (pts[i].x * pts[j].y) - (pts[j].x * pts[i].y); x += (pts[i].x + pts[j].x) * f; y += (pts[i].y + pts[j].y) * f; a += f * 3; } return { x: x / (a || 1), y: y / (a || 1) }; }
+
+    function handleDelete(mx, my) {
+        const hit = findObjectAt(mx, my);
+        if (!hit) return;
+
+        if (hit.type === 'point') {
+            const pointToDelete = hit.el;
+            const pointElement = pointToDelete.el;
+            pointElement.remove();
+            allPoints = allPoints.filter(p => p !== pointToDelete);
+            saveState('delete_point', [pointElement]);
+            renderPointList();
+            updateMiniMap();
+        } else if (hit.type === 'polyline' || hit.type === 'polygon') {
+            const obj = hit.el;
+            const isPolygon = obj.tagName === 'polygon';
+            const isParallel = obj.hasAttribute('data-group-id');
+
+            if (isPolygon || isParallel) {
+                // Break object: delete segment, keep points
+                const pts = getPointsArray(obj);
+                const layerId = obj.getAttribute('data-layer-id');
+                const layer = layers.find(l => l.id == layerId);
+                if (!layer) return;
+
+                obj.remove();
+                const addedElements = [];
+
+                if (isPolygon) {
+                    const newPoints = [];
+                    for (let i = 0; i < pts.length; i++) newPoints.push(pts[(hit.segIdx + 1 + i) % pts.length]);
+                    const newPolyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                    newPolyline.setAttribute("points", newPoints.map(p => `${p.x},${p.y}`).join(' '));
+                    newPolyline.setAttribute("data-layer-id", layerId); newPolyline.setAttribute("stroke", layer.color); newPolyline.setAttribute("stroke-width", layer.thickness); newPolyline.setAttribute("fill", "none");
+                    svgLayer.appendChild(newPolyline);
+                    addedElements.push(newPolyline);
+                } else { // isParallel polyline
+                    if (pts.length > 2) {
+                        const pts1 = pts.slice(0, hit.segIdx + 1), pts2 = pts.slice(hit.segIdx + 1);
+                        if (pts1.length > 1) { const newPoly1 = obj.cloneNode(); newPoly1.setAttribute("points", pts1.map(p => `${p.x},${p.y}`).join(' ')); svgLayer.appendChild(newPoly1); addedElements.push(newPoly1); }
+                        if (pts2.length > 1) { const newPoly2 = obj.cloneNode(); newPoly2.setAttribute("points", pts2.map(p => `${p.x},${p.y}`).join(' ')); svgLayer.appendChild(newPoly2); addedElements.push(newPoly2); }
+                    }
+                }
+                saveState('break', { removed: [obj], added: addedElements });
+                updateMiniMap();
+            } else { // Simple polyline: delete line and its points
+                const pts = getPointsArray(obj);
+                const elementsToDelete = [obj];
+                const pointsToRemove = [];
+                pts.forEach(pt => {
+                    const foundPoint = allPoints.find(p => Math.abs(p.x - pt.x) < 0.01 && Math.abs(p.y - pt.y) < 0.01);
+                    if (foundPoint) { elementsToDelete.push(foundPoint.el); pointsToRemove.push(foundPoint); }
+                });
+                elementsToDelete.forEach(el => el.remove());
+                allPoints = allPoints.filter(p => !pointsToRemove.includes(p));
+                saveState('delete', elementsToDelete);
+                renderPointList();
+                updateMiniMap();
+            }
+        }
+    }
+
+    function handleQuery(mx, my, sx, sy) {
+        let fP = null, minD = 15 / scale; allPoints.forEach(p => { const d = Math.sqrt((mx-p.x)**2 + (my-p.y)**2); if (d < minD) { minD = d; fP = p; } });
+        if (fP) { createPointModal(fP, sx, sy); return; }
+        const objs = Array.from(svgLayer.querySelectorAll('polyline, polygon'));
+        let fS = null, minSD = 15 / scale;
+        objs.forEach(o => { if (o.id.includes('band') || o.id.includes('measure') || o.id.includes('highlight') || o.classList.contains('hatch-line')) return; const pts = getPointsArray(o); for (let i = 0; i < pts.length - 1; i++) { const res = findNearestOnSeg(mx, my, pts[i], pts[i+1]); if (res.dist < minSD) { minSD = res.dist; fS = { p1: pts[i], p2: pts[i+1], obj: o }; } } });
+        if (fS) { highlightSegment(fS.p1, fS.p2); createInfoModal(fS.obj, sx, sy, false, fS); return; }
+        for (let o of objs) { if (o.id.includes('band') || o.id.includes('measure') || o.id.includes('highlight') || o.classList.contains('hatch-line')) continue; if (o.tagName === 'polygon' && isPtInPoly(mx, my, getPointsArray(o))) { highlightFullPolygon(o); createInfoModal(o, sx, sy, true); return; } }
+        finishAction();
+    }
+
+    function handleVolumeCalculation(mx, my) {
+        const objs = Array.from(svgLayer.querySelectorAll('polygon'));
+        let found = null;
+        for (let i = objs.length - 1; i >= 0; i--) {
+            let o = objs[i];
+            if (o.id.includes('band') || o.id.includes('measure') || o.id.includes('highlight') || o.classList.contains('hatch-line')) continue;
+            if (isPtInPoly(mx, my, getPointsArray(o))) { found = o; break; }
+        }
+        if (found) {
+            const pts = getPointsArray(found);
+            let totalZ = 0, count = 0;
+            pts.forEach(pt => { let bestP = null, minD = 0.1; for(let p of allPoints) { let d = Math.sqrt((p.x - pt.x)**2 + (p.y - pt.y)**2); if (d < minD) { minD = d; bestP = p; } } if (bestP) { totalZ += parseFloat(bestP.z); count++; } });
+            let avgZ = count > 0 ? totalZ / count : 0; let area = calculateArea(pts); let volume = area * avgZ;
+            found.setAttribute('data-volume', volume.toFixed(2)); updateLayerStyles(found.getAttribute('data-layer-id'));
+            alert(`Kübaj Hesaplandı:\nOrt. Kot: ${avgZ.toFixed(2)}\nAlan: ${area.toFixed(2)} m²\nHacim: ${volume.toFixed(2)} m³`);
+        }
+    }
+
+    function createPointModal(p, sx, sy) { document.querySelectorAll('.info-modal').forEach(m => m.remove()); const m = document.createElement('div'); m.className = 'info-modal'; m.style.left = (sx + 15) + 'px'; m.style.top = (sy + 15) + 'px'; const l = layers.find(l => l.id == p.el.getAttribute('data-layer-id')); m.innerHTML = `<div class="modal-header"><span>NOKTA BİLGİ</span><span class="close-btn" style="cursor:pointer">X</span></div><div class="modal-body"><table><tr><td>No</td><td>P${p.id}</td></tr><tr><td>Tabaka</td><td>${l?l.name:'-'}</td></tr><tr><td>X</td><td>${p.x.toFixed(3)}</td></tr><tr><td>Y</td><td>${p.y.toFixed(3)}</td></tr><tr><td>Z</td><td>${p.z}</td></tr></table></div><div class="modal-footer"><button class="nc-btn close-btn">Tamam</button></div>`; document.body.appendChild(m); m.querySelectorAll('.close-btn').forEach(b => b.onclick = () => { m.remove(); finishAction(); }); makeDraggable(m); }
+    function createInfoModal(o, sx, sy, isA, s = null) { document.querySelectorAll('.info-modal').forEach(m => m.remove()); const m = document.createElement('div'); m.className = 'info-modal'; m.style.left = (sx + 15) + 'px'; m.style.top = (sy + 15) + 'px'; const l = layers.find(l => l.id == o.getAttribute('data-layer-id')), pts = getPointsArray(o); let h = ""; if (isA) { h = `<tr><td>Alan</td><td>${calculateArea(pts).toFixed(3)} m²</td></tr><tr><td>Çevre</td><td>${calculatePerimeter(pts).toFixed(3)} m</td></tr>`; } else { const d = Math.sqrt((s.p2.x-s.p1.x)**2+(s.p2.y-s.p1.y)**2); h = `<tr><td>Uzunluk</td><td>${d.toFixed(3)} m</td></tr>`; } m.innerHTML = `<div class="modal-header"><span>OBJE BİLGİ</span><span class="close-btn" style="cursor:pointer">X</span></div><div class="modal-body"><table><tr><td>Tabaka</td><td>${l?l.name:'-'}</td></tr>${h}</table></div><div class="modal-footer"><button class="nc-btn close-btn">Tamam</button></div>`; document.body.appendChild(m); m.querySelectorAll('.close-btn').forEach(b => b.onclick = () => { m.remove(); finishAction(); }); makeDraggable(m); }
+    function createPoint(x, y) { const l = getActiveLayer(), z = parseFloat(document.getElementById('inp-z').value || 0).toFixed(2); pointCount++; const w = document.createElement('div'); w.className = 'point-wrapper'; w.setAttribute('data-layer-id', l.id); w.style.left = x + 'px'; w.style.top = y + 'px'; w.setAttribute('data-id', pointCount); w.setAttribute('data-x', x.toFixed(2)); w.setAttribute('data-y', y.toFixed(2)); w.setAttribute('data-z', z); if (currentGroupId) w.setAttribute('data-group-id', currentGroupId); const d = document.createElement('div'); d.className = 'point'; d.style.backgroundColor = l.color; const la = document.createElement('div'); la.className = 'point-label'; w.appendChild(d); w.appendChild(la); canvas.appendChild(w); allPoints.push({ id: pointCount, x, y, z, el: w }); refreshLayerLabels(l.id); if (currentMode === 'point') saveState('add_point', [w]); renderPointList(); return w; }
+    function addToLine(x, y) { const l = getActiveLayer(); if (!currentPolyline) { currentPolyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); currentPolyline.setAttribute("data-layer-id", l.id); currentPolyline.setAttribute("fill", "none"); currentPolyline.setAttribute("stroke", l.color); currentPolyline.setAttribute("stroke-width", l.thickness); svgLayer.appendChild(currentPolyline); linePoints = []; } linePoints.push({x, y}); currentPolyline.setAttribute("points", linePoints.map(p => `${p.x},${p.y}`).join(" ")); }
+    function addToPolygon(x, y) { const l = getActiveLayer(); if (!currentPolygon) { currentPolygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon"); currentPolygon.setAttribute("data-layer-id", l.id); currentPolygon.setAttribute("stroke", l.color); currentPolygon.setAttribute("stroke-width", l.thickness); currentPolygon.setAttribute("fill", l.fill ? hexToRgba(l.color, 0.2) : "none"); svgLayer.appendChild(currentPolygon); linePoints = []; } linePoints.push({x, y}); currentPolygon.setAttribute("points", linePoints.map(p => `${p.x},${p.y}`).join(" ")); }
+    function addToParallel(x, y) { const l = getActiveLayer(), dL = parseFloat(document.getElementById('para-left').value) || 0, dR = parseFloat(document.getElementById('para-right').value) || 0; linePoints.push({x, y}); if (linePoints.length < 2) return; if (!leftPolyline && dL > 0) leftPolyline = createParallelSvg(l.color, l.id, l.thickness, dL); if (!rightPolyline && dR > 0) rightPolyline = createParallelSvg(l.color, l.id, l.thickness, -dR); if (leftPolyline) leftPolyline.setAttribute("points", calculateParallelPoints(linePoints, dL).join(" ")); if (rightPolyline) rightPolyline.setAttribute("points", calculateParallelPoints(linePoints, -dR).join(" ")); }
+    function createParallelSvg(c, lid, t, dist) { const pl = document.createElementNS("http://www.w3.org/2000/svg", "polyline"); pl.setAttribute("data-layer-id", lid); pl.setAttribute("fill", "none"); pl.setAttribute("stroke", c); pl.setAttribute("stroke-width", t); pl.setAttribute("data-group-id", currentGroupId); pl.setAttribute("data-para-dist", dist); svgLayer.appendChild(pl); return pl; }
+    function getPointsArray(o) { return o.getAttribute('points').trim().split(/\s+/).map(p => { const c = p.split(','); return {x: parseFloat(c[0]), y: parseFloat(c[1])}; }); }
+    function findNearestOnSeg(px, py, p1, p2) { const dx = p2.x - p1.x, dy = p2.y - p1.y; if (dx === 0 && dy === 0) return { dist: Math.sqrt((px-p1.x)**2+(py-p1.y)**2), x: p1.x, y: p1.y }; const t = Math.max(0, Math.min(1, ((px-p1.x)*dx + (py-p1.y)*dy) / (dx*dx+dy*dy))), sx = p1.x + t*dx, sy = p1.y + t*dy; return { dist: Math.sqrt((px-sx)**2+(py-sy)**2), x: sx, y: sy }; }
+    function isPtInPoly(x, y, pts) { let inside = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { if (((pts[i].y > y) !== (pts[j].y > y)) && (x < (pts[j].x-pts[i].x)*(y-pts[i].y)/(pts[j].y-pts[i].y)+pts[i].x)) inside = !inside; } return inside; }
+    function calculateArea(pts) { let a = 0; for (let i = 0; i < pts.length; i++) { let j = (i+1)%pts.length; a += pts[i].x*pts[j].y; a -= pts[j].x*pts[i].y; } return Math.abs(a)/2; }
+    function calculatePerimeter(pts) { let p = 0; for (let i = 0; i < pts.length; i++) { let j = (i+1)%pts.length; p += Math.sqrt((pts[j].x-pts[i].x)**2+(pts[j].y-pts[i].y)**2); } return p; }
+    function highlightSegment(p1, p2) { highlightPoly.style.visibility = 'hidden'; highlightLine.setAttribute('x1', p1.x); highlightLine.setAttribute('y1', p1.y); highlightLine.setAttribute('x2', p2.x); highlightLine.setAttribute('y2', p2.y); highlightLine.style.visibility = 'visible'; }
+    function highlightFullPolygon(o) { highlightLine.style.visibility = 'hidden'; highlightPoly.setAttribute('points', o.getAttribute('points')); highlightPoly.style.visibility = 'visible'; }
+    function makeDraggable(el) { const h = el.querySelector('.modal-header'); h.onmousedown = (e) => { let px = e.clientX, py = e.clientY; document.onmousemove = (e) => { el.style.left = (el.offsetLeft+(e.clientX-px))+"px"; el.style.top = (el.offsetTop+(e.clientY-py))+"px"; px=e.clientX; py=e.clientY; }; document.onmouseup = () => document.onmousemove = null; }; }
+
+    container.addEventListener('mousedown', (e) => { 
+        if (e.button === 1 || (e.button === 0 && !currentMode)) { isDragging = true; startX = e.clientX - translateX; startY = e.clientY - translateY; } 
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (measureFrozen) return;
+        const rect = container.getBoundingClientRect(); 
+        let rawX = (e.clientX - rect.left - translateX) / scale, rawY = (e.clientY - rect.top - translateY) / scale;
+        let snap = (currentMode && currentMode !== 'query' && !currentMode.startsWith('extend_')) ? calculateSnap(rawX, rawY) : null;
+        let tx = snap ? snap.x : rawX, ty = snap ? snap.y : rawY;
+        if (snap) { snapIndicator.style.display = 'block'; snapIndicator.style.left = (tx * scale + translateX) + 'px'; snapIndicator.style.top = (ty * scale + translateY) + 'px'; } 
+        else { snapIndicator.style.display = 'none'; }
+        if (isDragging) { translateX = e.clientX - startX; translateY = e.clientY - startY; updateTransform(); }
+        
+        if (currentMode === 'move_target' && advState.base) {
+            const dx = tx - advState.base.x;
+            const dy = ty - advState.base.y;
+            if (advState.type === 'point') {
+                const rp = advState.relatedPoints[0];
+                updatePointPos(rp.pt, rp.ox + dx, rp.oy + dy);
+            } else {
+                const newPts = advState.initialGeom.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                advState.obj.setAttribute("points", newPts.map(p => `${p.x},${p.y}`).join(" "));
+                advState.relatedPoints.forEach(rp => updatePointPos(rp.pt, rp.ox + dx, rp.oy + dy));
+            }
+        }
+        
+        if (currentMode === 'rotate_active') {
+            const angle = Math.atan2(ty - advState.center.y, tx - advState.center.x);
+            const diff = angle - advState.startAngle;
+            const cx = advState.center.x, cy = advState.center.y, cos = Math.cos(diff), sin = Math.sin(diff);
+            const newPts = advState.initialGeom.map(p => ({ x: (p.x - cx) * cos - (p.y - cy) * sin + cx, y: (p.x - cx) * sin + (p.y - cy) * cos + cy }));
+            if (advState.type === 'point') updatePointPos(advState.obj, newPts[0].x, newPts[0].y);
+            else {
+                advState.obj.setAttribute("points", newPts.map(p => `${p.x},${p.y}`).join(" "));
+                if (advState.relatedPoints) {
+                    advState.relatedPoints.forEach(rp => {
+                        const nx = (rp.ox - cx) * cos - (rp.oy - cy) * sin + cx;
+                        const ny = (rp.ox - cx) * sin + (rp.oy - cy) * cos + cy;
+                        updatePointPos(rp.pt, nx, ny);
+                    });
+                }
+            }
+        }
+        
+        if (currentMode === 'scale_active') {
+            if (!advState.obj) return;
+            const currentDist = Math.sqrt((tx - advState.center.x)**2 + (ty - advState.center.y)**2);
+            let rawScale = (advState.startDist > 0.001) ? (currentDist / advState.startDist) : 1;
+            const scaleFactor = rawScale;
+            const cx = advState.center.x, cy = advState.center.y;
+            const newPts = advState.initialGeom.map(p => ({ x: (p.x - cx) * scaleFactor + cx, y: (p.y - cy) * scaleFactor + cy }));
+            if (advState.type === 'point') updatePointPos(advState.obj, newPts[0].x, newPts[0].y);
+            else {
+                advState.obj.setAttribute("points", newPts.map(p => `${p.x},${p.y}`).join(" "));
+                if (advState.relatedPoints) {
+                    advState.relatedPoints.forEach(rp => {
+                        const nx = (rp.ox - cx) * scaleFactor + cx;
+                        const ny = (rp.oy - cy) * scaleFactor + cy;
+                        updatePointPos(rp.pt, nx, ny);
+                    });
+                }
+            }
+        }
+
+        if (currentMode && linePoints.length > 0) {
+            if (['polygon', 'line', 'parallel'].includes(currentMode)) {
+                let last = linePoints[linePoints.length - 1];
+                rubberBand.setAttribute("x1", last.x); rubberBand.setAttribute("y1", last.y); rubberBand.setAttribute("x2", tx); rubberBand.setAttribute("y2", ty); rubberBand.style.visibility = "visible";
+            } else if (currentMode === 'measure_dist') {
+                let first = linePoints[0];
+                measureLineUI.setAttribute("x1", first.x); measureLineUI.setAttribute("y1", first.y); measureLineUI.setAttribute("x2", tx); measureLineUI.setAttribute("y2", ty); measureLineUI.style.visibility = "visible";
+                let d = Math.sqrt((tx - first.x)**2 + (ty - first.y)**2);
+                let angle = Math.atan2(ty - first.y, tx - first.x) * (200 / Math.PI);
+                dynamicLabel.style.display = 'block';
+                dynamicLabel.style.left = ((first.x + tx) / 2 * scale + translateX) + 'px';
+                dynamicLabel.style.top = ((first.y + ty) / 2 * scale + translateY) + 'px';
+                dynamicLabel.innerText = `${d.toFixed(3)} m / ${angle.toFixed(2)} g`;
+                measureOutput.innerText = `Mesafe: ${d.toFixed(3)} m | Eğime: ${angle.toFixed(2)} grad`;
+            } else if (currentMode === 'measure_area') {
+                let tempPts = [...linePoints, {x: tx, y: ty}];
+                measurePolyUI.setAttribute("points", tempPts.map(p => `${p.x},${p.y}`).join(" "));
+                measurePolyUI.style.visibility = "visible";
+                if (tempPts.length > 2) {
+                    let area = calculateArea(tempPts);
+                    let centroid = getPolygonCentroid(tempPts);
+                    dynamicLabel.style.display = 'block';
+                    dynamicLabel.style.left = (centroid.x * scale + translateX) + 'px';
+                    dynamicLabel.style.top = (centroid.y * scale + translateY) + 'px';
+                    dynamicLabel.innerText = `${area.toFixed(3)} m²`;
+                    measureOutput.innerText = `Anlık Alan: ${area.toFixed(3)} m²`;
+                }
+            }
+        } else {
+            if (!measureFrozen) dynamicLabel.style.display = 'none';
+        }
+        
+        let coordText = `Yerel -> X: ${tx.toFixed(3)} , Y: ${ty.toFixed(3)}`;
+        if (itrfSettings.active) {
+            const itrf = calculateITRF(tx, ty);
+            coordText += ` | ITRF -> Y: ${itrf.y.toFixed(3)} , X: ${itrf.x.toFixed(3)}`;
+        }
+        coordDisplay.innerText = coordText;
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+    });
+
+    let sessionPoints = [];
+    container.addEventListener('click', (e) => {
+        const l = getActiveLayer(); if (l.locked && !['query', 'measure_dist', 'measure_area'].includes(currentMode)) return;
+        if (measureFrozen) { finishAction(); measureFrozen = false; }
+        const coords = coordDisplay.innerText.split(",");
+        let mx = parseFloat(coords[0].split(":")[1]), my = parseFloat(coords[1].split(":")[1]);
+        if (currentMode === 'delete') { handleDelete(mx, my); return; }
+        if (currentMode === 'query') { handleQuery(mx, my, e.clientX, e.clientY); return; }
+        if (currentMode === 'measure_dist') { if (linePoints.length === 0) { linePoints.push({x: mx, y: my}); } else { measureFrozen = true; } return; }
+        if (currentMode === 'measure_area') { linePoints.push({x: mx, y: my}); return; }
+        if (currentMode === 'calc_volume') { handleVolumeCalculation(mx, my); return; }
+        if (currentMode === 'symbol') { placeSymbol(mx, my); return; }
+        if (currentMode && currentMode.includes('_')) { handleAdvancedTools(mx, my, e); return; }
+        if (currentMode && (subMode === 'mouse' || subMode === 'coords') && !isDragging) {
+            if (currentMode === 'polygon' && linePoints.length > 2) {
+                let f = linePoints[0];
+                if (Math.sqrt((mx - f.x)**2 + (my - f.y)**2) < 15 / scale) { document.getElementById('area-style-modal').style.display = 'block'; return; }
+            }
+            if (currentMode === 'parallel' && linePoints.length === 0) currentGroupId = 'group_' + Date.now();
+            processInput(mx, my);
+        }
+    });
+
+    container.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        if (currentMode === 'measure_area' && linePoints.length > 2 && !measureFrozen) { 
+            measureFrozen = true; 
+        } else { 
+            document.querySelectorAll('.info-modal').forEach(m => m.remove()); 
+            finishAction(); 
+        }
+    });
+
+    function handleAdvancedTools(mx, my, e) {
+        if (currentMode === 'move_select') {
+            let hit = findObjectAt(mx, my);
+            if (!hit) {
+                const polys = Array.from(document.querySelectorAll('polygon'));
+                for (let p of polys) {
+                     if (p.id.includes('band') || p.id.includes('measure') || p.id.includes('highlight') || p.classList.contains('hatch-line')) continue;
+                     if (isPtInPoly(mx, my, getPointsArray(p))) { hit = { type: 'polygon_full', el: p }; break; }
+                }
+            }
+            if (hit) {
+                advState.isDecomposed = false;
+                if (hit.type === 'polygon' || hit.type === 'polygon_full') {
+                    advState.obj = hit.el;
+                    advState.type = 'polygon';
+                } else {
+                    advState.obj = hit.el;
+                    advState.type = hit.type;
+                }
+                
+                advState.relatedPoints = [];
+                if (advState.type === 'point') {
+                    const p = advState.obj;
+                    document.querySelectorAll('polyline, polygon').forEach(poly => {
+                        if (poly.id.includes('band') || poly.id.includes('measure') || poly.id.includes('highlight') || poly.classList.contains('hatch-line')) return;
+                        const pts = getPointsArray(poly);
+                        if (pts.some(pt => Math.abs(pt.x - p.x) < 0.01 && Math.abs(pt.y - p.y) < 0.01)) {
+                            poly.remove();
+                        }
+                    });
+                    advState.relatedPoints.push({ pt: advState.obj, ox: advState.obj.x, oy: advState.obj.y });
+                } else {
+                    advState.initialGeom = getPointsArray(advState.obj);
+                    advState.initialGeom.forEach(v => {
+                        const p = allPoints.find(ap => Math.abs(ap.x - v.x) < 0.01 && Math.abs(ap.y - v.y) < 0.01);
+                        if (p && !advState.relatedPoints.find(rp => rp.pt === p)) {
+                            advState.relatedPoints.push({ pt: p, ox: p.x, oy: p.y });
+                        }
+                    });
+                }
+
+                advState.base = { x: mx, y: my };
+                highlightLine.style.visibility = "hidden"; 
+                highlightPoly.style.visibility = "hidden";
+                if (advState.type === 'point') advState.obj.el.style.border = 'none';
+                setMode('move_target');
+            }
+        } else if (currentMode === 'move_target') {
+            const dx = mx - advState.base.x;
+            const dy = my - advState.base.y;
+            if (advState.type === 'point') {
+                const rp = advState.relatedPoints[0];
+                updatePointPos(rp.pt, rp.ox + dx, rp.oy + dy);
+            } else {
+                const newPts = advState.initialGeom.map(p => ({ x: p.x + dx, y: p.y + dy }));
+                advState.obj.setAttribute("points", newPts.map(p => `${p.x},${p.y}`).join(" "));
+                advState.relatedPoints.forEach(rp => updatePointPos(rp.pt, rp.ox + dx, rp.oy + dy));
+            }
+            if (advState.obj) {
+                const layerId = advState.type === 'point' ? advState.obj.el.getAttribute('data-layer-id') : advState.obj.getAttribute('data-layer-id');
+                if (layerId) updateLayerStyles(layerId);
+            }
+            if (advState.relatedPoints) {
+                advState.relatedPoints.forEach(rp => refreshLayerLabels(rp.pt.el.getAttribute('data-layer-id')));
+            }
+            repairSinglePointLines();
+            finishAction();
+            currentMode = null;
+            snapSettings.end = false; snapSettings.mid = false;
+            document.getElementById('snap-end').classList.remove('active');
+            document.getElementById('snap-mid').classList.remove('active');
+        } else if (currentMode === 'rotate_select') {
+            let hit = findObjectAt(mx, my);
+            if (!hit) {
+                const polys = Array.from(document.querySelectorAll('polygon'));
+                for (let p of polys) {
+                     if (p.id.includes('band') || p.id.includes('measure') || p.id.includes('highlight') || p.classList.contains('hatch-line')) continue;
+                     if (isPtInPoly(mx, my, getPointsArray(p))) { hit = { type: 'polygon_full', el: p }; break; }
+                }
+            }
+            if (hit) {
+                advState.isDecomposed = false;
+                if (hit.type === 'polygon' || hit.type === 'polygon_full') {
+                    advState.obj = hit.el;
+                    advState.type = 'polygon';
+                } else {
+                    if (hit.type === 'polyline' && hit.el.hasAttribute('data-group-id')) {
+                        advState.obj = decomposePolyline(hit.el, hit.segIdx);
+                        advState.type = 'polyline';
+                        advState.isParallel = true;
+                    } else {
+                        advState.obj = hit.el;
+                        advState.type = hit.type;
+                        advState.isParallel = false;
+                    }
+                }
+                
+                if (!advState.obj) return;
+
+                advState.initialGeom = (advState.type === 'point') ? [{x: advState.obj.x, y: advState.obj.y}] : getPointsArray(advState.obj);
+                advState.relatedPoints = [];
+                if (advState.type === 'point') {
+                    advState.relatedPoints.push({ pt: advState.obj, ox: advState.obj.x, oy: advState.obj.y });
+                } else {
+                    advState.initialGeom.forEach(v => {
+                        const p = allPoints.find(ap => Math.abs(ap.x - v.x) < 0.01 && Math.abs(ap.y - v.y) < 0.01);
+                        if (p && !advState.relatedPoints.find(rp => rp.pt === p)) advState.relatedPoints.push({ pt: p, ox: p.x, oy: p.y });
+                    });
+                }
+                let cx = 0, cy = 0; advState.initialGeom.forEach(p => { cx += p.x; cy += p.y; }); cx /= advState.initialGeom.length; cy /= advState.initialGeom.length;
+                advState.center = { x: cx, y: cy };
+                advState.startAngle = Math.atan2(my - cy, mx - cx);
+                currentMode = 'rotate_active';
+                snapSettings.end = true; snapSettings.mid = true;
+                document.getElementById('snap-end').classList.add('active');
+                document.getElementById('snap-mid').classList.add('active');
+            }
+        } else if (currentMode === 'rotate_active') {
+            if (advState.obj.tagName === 'polygon') {
+                const finalAngle = Math.atan2(my - advState.center.y, mx - advState.center.x);
+                const diff = finalAngle - advState.startAngle;
+                const deg = diff * 180 / Math.PI;
+
+                const oldRotation = parseFloat(advState.obj.getAttribute('data-rotation')) || 0;
+                const newRotation = oldRotation + deg;
+                advState.obj.setAttribute('data-rotation', newRotation);
+            }
+            if (advState.obj && advState.type !== 'point') {
+                const pts = getPointsArray(advState.obj);
+                if (pts.length > 0) {
+                    const hasPoint = (x, y) => allPoints.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01);
+                    const pStart = pts[0], pEnd = pts[pts.length - 1];
+                    if (!hasPoint(pStart.x, pStart.y)) createPoint(pStart.x, pStart.y);
+                    if (pts.length > 1) {
+                        if (!hasPoint(pEnd.x, pEnd.y)) createPoint(pEnd.x, pEnd.y);
+                    }
+                }
+            }
+            if (advState.isDecomposed) {
+                document.querySelectorAll('[data-temp-decomposed="true"]').forEach(el => {
+                    const pts = getPointsArray(el);
+                    const hasPoint = (x, y) => allPoints.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01);
+                    if (!hasPoint(pts[0].x, pts[0].y)) createPoint(pts[0].x, pts[0].y);
+                    if (!hasPoint(pts[pts.length-1].x, pts[pts.length-1].y)) createPoint(pts[pts.length-1].x, pts[pts.length-1].y);
+                    el.removeAttribute("data-temp-decomposed");
+                });
+            }
+            if (advState.obj && advState.obj.getAttribute('data-layer-id')) {
+                updateLayerStyles(advState.obj.getAttribute('data-layer-id'));
+            }
+            if (advState.relatedPoints) advState.relatedPoints.forEach(rp => refreshLayerLabels(rp.pt.el.getAttribute('data-layer-id')));
+            repairSinglePointLines();
+            finishAction();
+            currentMode = null;
+            snapSettings.end = false; snapSettings.mid = false;
+            document.getElementById('snap-end').classList.remove('active');
+            document.getElementById('snap-mid').classList.remove('active');
+        } else if (currentMode === 'scale_select') {
+            let hit = findObjectAt(mx, my);
+            if (hit && hit.type === 'polygon') hit = null;
+            if (!hit) {
+                const polys = Array.from(document.querySelectorAll('polygon'));
+                for (let p of polys) {
+                     if (p.id.includes('band') || p.id.includes('measure') || p.id.includes('highlight') || p.classList.contains('hatch-line')) continue;
+                     if (isPtInPoly(mx, my, getPointsArray(p))) { hit = { type: 'polygon_full', el: p }; break; }
+                }
+            }
+            if (hit) {
+                advState.isDecomposed = false;
+                if (hit.type === 'polygon_full') {
+                    advState.obj = hit.el;
+                    advState.type = 'polygon';
+                } else {
+                    if (hit.type === 'polyline' && hit.el.hasAttribute('data-group-id')) {
+                        advState.obj = decomposePolyline(hit.el, hit.segIdx);
+                        advState.type = 'polyline';
+                        advState.isParallel = true;
+                    } else {
+                        advState.obj = hit.el;
+                        advState.type = hit.type;
+                        advState.isParallel = false;
+                    }
+                }
+                advState.initialGeom = (advState.type === 'point') ? [{x: advState.obj.x, y: advState.obj.y}] : getPointsArray(advState.obj);
+                advState.relatedPoints = [];
+                if (advState.type === 'point') {
+                    advState.relatedPoints.push({ pt: advState.obj, ox: advState.obj.x, oy: advState.obj.y });
+                } else {
+                    // Çizginin uçlarındaki noktaların takibi için bu noktaların var olduğundan emin ol.
+                    advState.initialGeom.forEach(v => {
+                        let p = allPoints.find(ap => Math.abs(ap.x - v.x) < 0.01 && Math.abs(ap.y - v.y) < 0.01);
+                        if (!p) {
+                            // Eğer çizginin ucunda nokta objesi yoksa (örn. DXF'ten gelen), oluştur.
+                            createPoint(v.x, v.y);
+                            p = allPoints[allPoints.length - 1]; // Yeni oluşturulan noktayı al
+                        }
+                        if (p && !advState.relatedPoints.find(rp => rp.pt === p)) advState.relatedPoints.push({ pt: p, ox: p.x, oy: p.y });
+                    });
+                }
+                let cx = 0, cy = 0; advState.initialGeom.forEach(p => { cx += p.x; cy += p.y; }); cx /= advState.initialGeom.length; cy /= advState.initialGeom.length;
+                advState.center = { x: cx, y: cy };
+                advState.startDist = Math.sqrt((mx - cx)**2 + (my - cy)**2);
+                if (advState.startDist < 0.001) advState.startDist = 0.001;
+                
+                currentMode = 'scale_active';
+                snapSettings.end = true; snapSettings.mid = true;
+                document.getElementById('snap-end').classList.add('active');
+                document.getElementById('snap-mid').classList.add('active');
+            }
+        } else if (currentMode === 'scale_active') {
+            if (advState.obj && advState.type !== 'point') {
+                const pts = getPointsArray(advState.obj);
+                if (pts.length > 0) {
+                    const hasPoint = (x, y) => allPoints.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01);
+                    const pStart = pts[0], pEnd = pts[pts.length - 1];
+                    if (!hasPoint(pStart.x, pStart.y)) createPoint(pStart.x, pStart.y);
+                    if (pts.length > 1 && (Math.abs(pStart.x - pEnd.x) > 0.01 || Math.abs(pStart.y - pEnd.y) > 0.01)) {
+                        if (!hasPoint(pEnd.x, pEnd.y)) createPoint(pEnd.x, pEnd.y);
+                    }
+                }
+            }
+            if (advState.isDecomposed) {
+                document.querySelectorAll('[data-temp-decomposed="true"]').forEach(el => {
+                    const pts = getPointsArray(el);
+                    const hasPoint = (x, y) => allPoints.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01);
+                    if (!hasPoint(pts[0].x, pts[0].y)) createPoint(pts[0].x, pts[0].y);
+                    if (!hasPoint(pts[pts.length-1].x, pts[pts.length-1].y)) createPoint(pts[pts.length-1].x, pts[pts.length-1].y);
+                    el.removeAttribute("data-temp-decomposed");
+                });
+            }
+            if (advState.obj && advState.obj.getAttribute('data-layer-id')) {
+                updateLayerStyles(advState.obj.getAttribute('data-layer-id'));
+            }
+            if (advState.relatedPoints) advState.relatedPoints.forEach(rp => refreshLayerLabels(rp.pt.el.getAttribute('data-layer-id')));
+            repairSinglePointLines();
+            finishAction();
+            currentMode = null;
+            snapSettings.end = false; snapSettings.mid = false;
+            document.getElementById('snap-end').classList.remove('active');
+            document.getElementById('snap-mid').classList.remove('active');
+        } else if (currentMode === 'extend_select') {
+            const hit = findObjectAt(mx, my);
+            if (hit) {
+                advState.obj = hit.el;
+                advState.boundaryObj = hit.el;
+                highlightObject(hit.el, hit.type);
+                setMode('extend_perform');
+                alert("Uzatılacak çizgileri seçin (Bitirmek için Sağ Tık).");
+            }
+        } else if (currentMode === 'extend_perform') {
+            const rect = container.getBoundingClientRect();
+            mx = (e.clientX - rect.left - translateX) / scale;
+            my = (e.clientY - rect.top - translateY) / scale;
+
+            const hit = findObjectAt(mx, my);
+            if (hit && (hit.type === 'line' || hit.type === 'polyline') && advState.boundaryObj) {
+                // Calculate Ray from clicked point
+                const pts = getPointsArray(hit.el);
+                const p1 = pts[hit.segIdx];
+                const p2 = pts[hit.segIdx + 1];
+                
+                // Project click point to segment to ensure collinearity
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const lenSq = dx*dx + dy*dy;
+                if (lenSq === 0) return;
+                
+                const t = ((mx - p1.x) * dx + (my - p1.y) * dy) / lenSq;
+                const startX = p1.x + t * dx;
+                const startY = p1.y + t * dy;
+                
+                const len = Math.sqrt(lenSq);
+                const nx = dx / len;
+                const ny = dy / len;
+                const rayLen = 10000000;
+                const r1 = { x: startX + nx * rayLen, y: startY + ny * rayLen };
+                const r2 = { x: startX - nx * rayLen, y: startY - ny * rayLen };
+                
+                // Intersect with boundary
+                const bPts = getPointsArray(advState.boundaryObj);
+                let bestInt = null, minD = Infinity;
+                
+                const checkInt = (rayEnd, a, b) => {
+                    const i = intersect(startX, startY, rayEnd.x, rayEnd.y, a.x, a.y, b.x, b.y);
+                    if (i) {
+                        const d = Math.sqrt((startX - i.x)**2 + (startY - i.y)**2);
+                        if (d < minD && d > 0.01) { minD = d; bestInt = i; }
+                    }
+                };
+
+                const runCheck = (r) => {
+                    for (let i = 0; i < bPts.length - 1; i++) checkInt(r, bPts[i], bPts[i+1]);
+                    if (advState.boundaryObj.tagName === 'polygon') checkInt(r, bPts[bPts.length-1], bPts[0]);
+                };
+                
+                runCheck(r1);
+                runCheck(r2);
+                
+                if (bestInt) {
+                    // Create new line from Click (mx, my) to Intersection (bestInt)
+                    const l = getActiveLayer();
+                    const newLine = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                    newLine.setAttribute("points", `${startX},${startY} ${bestInt.x},${bestInt.y}`);
+                    newLine.setAttribute("stroke", l.color);
+                    newLine.setAttribute("stroke-width", l.thickness);
+                    newLine.setAttribute("fill", "none");
+                    newLine.setAttribute("data-layer-id", l.id);
+                    svgLayer.appendChild(newLine);
+                    
+                    // Create 2 P points
+                    createPoint(startX, startY);
+                    createPoint(bestInt.x, bestInt.y);
+                    
+                    saveState('extend_create', [newLine, allPoints[allPoints.length-2].el, allPoints[allPoints.length-1].el]);
+                } else {
+                    console.log("Kesişim bulunamadı.");
+                }
+            }
+        }
+    }
+    
+    function repairSinglePointLines() {
+        const lines = document.querySelectorAll('polyline, polygon');
+        lines.forEach(el => {
+            if (el.id.includes('band') || el.id.includes('measure') || el.id.includes('highlight') || el.classList.contains('hatch-line')) return;
+            const pts = getPointsArray(el);
+            const hasPoint = (x, y) => allPoints.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01);
+            for (let i = 0; i < pts.length - 1; i++) {
+                const p1 = pts[i], p2 = pts[i+1];
+                const hp1 = hasPoint(p1.x, p1.y), hp2 = hasPoint(p2.x, p2.y);
+                if (hp1 && !hp2) createPoint(p2.x, p2.y); else if (!hp1 && hp2) createPoint(p1.x, p1.y);
+            }
+            if (el.tagName === 'polygon') {
+                const p1 = pts[pts.length-1], p2 = pts[0];
+                const hp1 = hasPoint(p1.x, p1.y), hp2 = hasPoint(p2.x, p2.y);
+                if (hp1 && !hp2) createPoint(p2.x, p2.y); else if (!hp1 && hp2) createPoint(p1.x, p1.y);
+            }
+        });
+    }
+
+    function findObjectAt(mx, my) {
+        let minD = 10 / scale, found = null;
+        allPoints.forEach(p => { const d = Math.sqrt((mx-p.x)**2 + (my-p.y)**2); if (d < minD) { minD = d; found = { type: 'point', el: p }; } });
+        if (found) return found;
+        document.querySelectorAll('polyline, polygon').forEach(o => {
+            if (o.id.includes('band') || o.id.includes('measure') || o.id.includes('highlight') || o.classList.contains('hatch-line')) return;
+            const pts = getPointsArray(o);
+            for (let i = 0; i < pts.length - 1; i++) {
+                const res = findNearestOnSeg(mx, my, pts[i], pts[i+1]);
+                if (res.dist < minD) { minD = res.dist; found = { type: o.tagName, el: o, segIdx: i }; }
+            }
+            if (o.tagName === 'polygon') {
+                const res = findNearestOnSeg(mx, my, pts[pts.length-1], pts[0]);
+                if (res.dist < minD) { minD = res.dist; found = { type: 'polygon', el: o, segIdx: pts.length-1 }; }
+            }
+        });
+        return found;
+    }
+    function decomposePolygon(poly, idx, markTemp = false) {
+        const pts = getPointsArray(poly), l = layers.find(x => x.id == poly.getAttribute('data-layer-id'));
+        if (!l) return null;
+        poly.remove();
+        updateLayerStyles(l.id);
+        let ret = null;
+        for(let i=0; i<pts.length; i++) {
+            const p1 = pts[i], p2 = pts[(i+1)%pts.length];
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+            if (markTemp && i !== idx) line.setAttribute("data-temp-decomposed", "true");
+            line.setAttribute("points", `${p1.x},${p1.y} ${p2.x},${p2.y}`); line.setAttribute("data-layer-id", l.id); line.setAttribute("stroke", l.color); line.setAttribute("stroke-width", l.thickness); line.setAttribute("fill", "none");
+            svgLayer.appendChild(line); if(i===idx) ret = line;
+        } return ret;
+    }
+    function decomposePolyline(poly, idx) {
+        const pts = getPointsArray(poly), l = layers.find(x => x.id == poly.getAttribute('data-layer-id'));
+        poly.remove(); let ret = null;
+        for(let i=0; i<pts.length - 1; i++) {
+            const p1 = pts[i], p2 = pts[i+1];
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+            line.setAttribute("points", `${p1.x},${p1.y} ${p2.x},${p2.y}`); line.setAttribute("data-layer-id", l.id); line.setAttribute("stroke", l.color); line.setAttribute("stroke-width", l.thickness); line.setAttribute("fill", "none");
+            svgLayer.appendChild(line); if(i===idx) ret = line;
+        } return ret;
+    }
+    function highlightObject(el, type) { if(type==='point') el.el.style.border = '2px solid blue'; else if(type==='polygon') highlightFullPolygon(el); else { const pts=getPointsArray(el); highlightSegment(pts[0], pts[pts.length-1]); } }
+    function updatePointPos(p, x, y) {
+        p.x = x; p.y = y;
+        p.el.style.left = x + 'px'; p.el.style.top = y + 'px';
+        p.el.setAttribute('data-x', x.toFixed(2));
+        p.el.setAttribute('data-y', y.toFixed(2));
+        const gId = p.el.getAttribute('data-group-id');
+        if (gId) {
+            const gPts = Array.from(document.querySelectorAll(`.point-wrapper[data-group-id="${gId}"]`))
+                .sort((a, b) => parseInt(a.getAttribute('data-id')) - parseInt(b.getAttribute('data-id')))
+                .map(el => ({ x: parseFloat(el.getAttribute('data-x')), y: parseFloat(el.getAttribute('data-y')) }));
+            document.querySelectorAll(`polyline[data-group-id="${gId}"]`).forEach(l => l.setAttribute("points", calculateParallelPoints(gPts, parseFloat(l.getAttribute('data-para-dist'))).join(" ")));
+        }
+    }
+    function transformObject(obj, type, op, val) {
+        if (type === 'point') return;
+        const pts = getPointsArray(obj); let cx=0, cy=0; pts.forEach(p=>{cx+=p.x; cy+=p.y;}); cx/=pts.length; cy/=pts.length;
+        const newPts = pts.map(p => {
+            let x = p.x - cx, y = p.y - cy;
+            if (op === 'rotate') { const rad = val * Math.PI / 180; const nx = x * Math.cos(rad) - y * Math.sin(rad); const ny = x * Math.sin(rad) + y * Math.cos(rad); x = nx; y = ny; }
+            else { x *= val; y *= val; }
+            return { x: x + cx, y: y + cy };
+        });
+        obj.setAttribute("points", newPts.map(p => `${p.x},${p.y}`).join(" "));
+    }
+
+    function processInput(x, y) { const p = createPoint(x, y); sessionPoints.push(p); if (currentMode === 'line') addToLine(x, y); else if (currentMode === 'polygon') addToPolygon(x, y); else if (currentMode === 'parallel') addToParallel(x, y); }
+    function setMode(m) { 
+        if (linePoints.length > 0 && !currentMode.startsWith('measure')) { 
+            let els = [...sessionPoints]; if (currentPolyline) els.push(currentPolyline); if (currentPolygon) els.push(currentPolygon); if (leftPolyline) els.push(leftPolyline); if (rightPolyline) els.push(rightPolyline); saveState('draw', els); 
+        } 
+        finishAction(); 
+        
+        let nextMode = (currentMode === m) ? null : m;
+        const moveModes = ['move_select', 'move_target', 'move_base', 'rotate_select', 'rotate_active', 'scale_select', 'scale_active'];
+        if (nextMode === 'move_select' || nextMode === 'rotate_select' || nextMode === 'scale_select') {
+            snapSettings.end = true; snapSettings.mid = true;
+            document.getElementById('snap-end').classList.add('active');
+            document.getElementById('snap-mid').classList.add('active');
+        }
+        if (currentMode && moveModes.includes(currentMode) && (!nextMode || !moveModes.includes(nextMode))) {
+            snapSettings.end = false; snapSettings.mid = false;
+            document.getElementById('snap-end').classList.remove('active');
+            document.getElementById('snap-mid').classList.remove('active');
+        }
+        
+        if (m === 'extend_select') {
+            nextMode = 'extend_select';
+            advState.boundaryObj = null;
+            alert("Sınır objeyi seçin.");
+        }
+        currentMode = nextMode;
+        
+        document.querySelectorAll('#toolbar button, .side-btn').forEach(b => b.classList.remove('active')); 
+        container.classList.toggle('query-mode', currentMode === 'query' || currentMode === 'calc_volume');
+        container.classList.toggle('delete-mode', currentMode === 'delete');
+        if(currentMode) { 
+            const btn = document.getElementById('btn-' + m.replace('_', '-')); 
+            if(btn) btn.classList.add('active'); 
+            document.getElementById('common-options').style.display = (['query', 'measure_dist', 'measure_area', 'calc_volume', 'symbol', 'delete'].includes(m) || m.includes('_')) ? 'none' : 'block'; 
+            document.getElementById('parallel-options').style.display = (m === 'parallel') ? 'block' : 'none'; 
+        } 
+    }
+    function setSubMode(s) { subMode = s; document.getElementById('btn-mouse').classList.toggle('active', s==='mouse'); document.getElementById('btn-coords').classList.toggle('active', s==='coords'); }
+    function handleManualInput() { const x = parseFloat(document.getElementById('inp-x').value), y = parseFloat(document.getElementById('inp-y').value); if(!isNaN(x) && !isNaN(y)) { if (currentMode === 'parallel' && linePoints.length === 0) currentGroupId = 'group_' + Date.now(); processInput(x, y); focusOnPoint(x, y); } }
+    function focusOnPoint(x, y) { translateX = (container.clientWidth / 2) - (x * scale); translateY = (container.clientHeight / 2) - (y * scale); updateTransform(); }
+    function updateTransform() { 
+        canvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`; 
+        updateMiniMapViewport();
+        if (measureFrozen && dynamicLabel.style.display === 'block') {
+             if (currentMode === 'measure_dist') {
+                let first = linePoints[0];
+                let tx = parseFloat(measureLineUI.getAttribute('x2'));
+                let ty = parseFloat(measureLineUI.getAttribute('y2'));
+                dynamicLabel.style.left = ((first.x + tx) / 2 * scale + translateX) + 'px';
+                dynamicLabel.style.top = ((first.y + ty) / 2 * scale + translateY) + 'px';
+             } else if (currentMode === 'measure_area') {
+                let pts = getPointsArray(measurePolyUI);
+                let c = getPolygonCentroid(pts);
+                dynamicLabel.style.left = (c.x * scale + translateX) + 'px';
+                dynamicLabel.style.top = (c.y * scale + translateY) + 'px';
+             }
+        }
+    }
+
+    container.addEventListener('wheel', (e) => { e.preventDefault(); const d = e.deltaY > 0 ? -0.1 : 0.1, oldS = scale; scale = Math.min(Math.max(0.1, scale + d), 10); const r = container.getBoundingClientRect(); translateX = (e.clientX - r.left) - ((e.clientX - r.left) - translateX) * (scale / oldS); translateY = (e.clientY - r.top) - ((e.clientY - r.top) - translateY) * (scale / oldS); updateTransform(); }, { passive: false });
+    function applyAreaStyle() { const s = document.querySelector('input[name="area-style"]:checked').value, l = getActiveLayer(); if (currentPolygon) { currentPolygon.setAttribute("data-fill-type", s); updateLayerStyles(l.id); saveState('draw', [...sessionPoints, currentPolygon]); } document.getElementById('area-style-modal').style.display = 'none'; finishAction(); }
+    
+    function finishAction() { 
+        currentPolyline = currentPolygon = leftPolyline = rightPolyline = null; 
+        linePoints = []; sessionPoints = []; currentGroupId = null; 
+        rubberBand.style.visibility = "hidden"; paraBandLeft.style.visibility = "hidden"; paraBandRight.style.visibility = "hidden"; 
+        highlightLine.style.visibility = "hidden"; highlightPoly.style.visibility = "hidden"; 
+        measureLineUI.style.visibility = "hidden"; measurePolyUI.style.visibility = "hidden"; 
+        snapIndicator.style.display = 'none'; dynamicLabel.style.display = 'none'; 
+        document.querySelectorAll('.point-wrapper').forEach(p => p.style.border = 'none');
+        measureOutput.innerText = ""; 
+        measureFrozen = false; 
+    }
+
+    window.addEventListener('keydown', (e) => { 
+        if (e.key === "Escape") { 
+            if (currentMode === 'measure_area' && linePoints.length > 2 && !measureFrozen) { measureFrozen = true; } 
+            else { document.querySelectorAll('.info-modal').forEach(m => m.remove()); finishAction(); }
+        } 
+        if (e.ctrlKey && e.key === 'z') undo(); if (e.ctrlKey && e.key === 'y') redo(); 
+    });
+    setSubMode('mouse'); renderLayers();
+
+    let canCloseInfo = false;
+    function openInfoModal() {
+        const m = document.getElementById('info-overlay');
+        m.style.display = 'flex';
+        canCloseInfo = false;
+        setTimeout(() => {
+            canCloseInfo = true;
+        }, 4000);
+    }
+    function closeInfoModal() {
+        if (!canCloseInfo) return;
+        document.getElementById('info-overlay').style.display = 'none';
+    }
+    openInfoModal();
+</script>
+</body>
+</html>
