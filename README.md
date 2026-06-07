@@ -82,5 +82,5 @@ No Python backend or package installation is required.
 
 ### 1) Clone the repository
 ```bash
-git clone https://github.com/IsmailTech24303/Netcad-Reimagined.git
+git clone https://github.com/IsmailTech24303/GeoCAD-Web-Demo.git
 cd Netcad-Reimagined
