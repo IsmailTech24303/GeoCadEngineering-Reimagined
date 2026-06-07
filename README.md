@@ -1,8 +1,8 @@
-# GeoCAD-Web-Demo
+# Netcad Reimagined
 Netcad 5.2 işlevlerinin tersine mühendislik ile çözülerek web ortamına uyarlandığı, masaüstü bağımlı ağır bir CAD yazılımının doğrudan tarayıcı üzerinden çalışmasını sağlayan simülatör. Dinamik çizim, katman yönetimi ve sorgu araçlarının yanı sıra CAD programları ile çift yönlü dosya aktarım desteği sunar.
-# GeoCAD-Web-Demo 🗺️📐
+# Netcad Reimagined 🗺️📐
 
-**GeoCAD-Web-Demo** is a from-scratch GIS/geomatics simulator built with **HTML5, CSS3, and JavaScript**.  
+**Netcad Reimagined** is a from-scratch GIS/geomatics simulator built with **HTML5, CSS3, and JavaScript**.  
 It provides a modern engineering-style interface for drawing, measuring, editing, and managing spatial data directly in the browser.
 
 The application is designed for surveying and geomatics workflows, with support for vector drawing, snapping, layer control, DXF interoperability, raster overlay, and coordinate-based editing.
@@ -82,5 +82,5 @@ No Python backend or package installation is required.
 
 ### 1) Clone the repository
 ```bash
-git clone https://github.com/IsmailTech24303/GeoCAD-Web-Demo.git
+git clone https://github.com/IsmailTech24303/Netcad-Reimagined.git
 cd Netcad-Reimagined
